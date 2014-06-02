@@ -43,7 +43,7 @@ get '/' do
   return 'Welcome to h2gb!'
 end
 
-post '/disassemble/elf' do
+post '/parse/elf' do
   content_type :json
   data = nil
   get_file(params) do |filename|
@@ -55,7 +55,7 @@ post '/disassemble/elf' do
   return JSON.pretty_generate(data) + "\n"
 end
 
-post '/disassemble/pe' do
+post '/parse/pe' do
   
 end
 
