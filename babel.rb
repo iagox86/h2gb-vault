@@ -6,11 +6,30 @@ require 'tempfile'
 
 require 'elf'
 
+set :show_exceptions, false
+
+error do
+  content_type :json
+  status 400 # or whatever
+
+  e = env['sinatra.error']
+
+  result = {
+    :status => 0,
+    :e => e
+  }
+
+  puts("HIHI")
+
+  return JSON.pretty_generate(result) + "\n"
+end
+
 get '/' do
-  return 'hi'
+  return 'Welcome to h2gb!'
 end
 
 post '/disassemble/elf' do
+  content_type :json
   if(params['file'].is_a?(Hash))
     filename = params['file'][:tempfile]
 
@@ -26,9 +45,9 @@ post '/disassemble/elf' do
     file.unlink()
   end
 
-  puts(data.inspect)
+  data[:status] = 1
 
-  return JSON.pretty_generate(data)
+  return JSON.pretty_generate(data) + "\n"
 end
 
 get '/test' do
