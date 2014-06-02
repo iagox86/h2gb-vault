@@ -5,10 +5,22 @@ require 'sinatra'
 require 'tempfile'
 
 require 'elf'
+#require 'pe'
 
 set :show_exceptions, false
 set :bind, "0.0.0.0"
 set :port, 4567
+
+def get_file(params)
+  file = Tempfile.new('h2gb-babel')
+  file.write(params['file'])
+  file.close()
+  filename = file.path
+
+  yield file.path
+
+  file.unlink()
+end
 
 error do
   content_type :json
@@ -21,8 +33,6 @@ error do
     :e => e
   }
 
-  puts("HIHI")
-
   return JSON.pretty_generate(result) + "\n"
 end
 
@@ -32,24 +42,18 @@ end
 
 post '/disassemble/elf' do
   content_type :json
-  if(params['file'].is_a?(Hash))
-    filename = params['file'][:tempfile]
-
+  data = nil
+  get_file(params) do |filename|
     data = parse_elf(filename, true)
-  else
-    file = Tempfile.new('h2gb-babel')
-    file.write(params['file'])
-    file.close()
-    filename = file.path
-
-    data = parse_elf(filename, true)
-
-    file.unlink()
   end
 
   data[:status] = 1
 
   return JSON.pretty_generate(data) + "\n"
+end
+
+post '/disassemble/pe' do
+  
 end
 
 get '/test' do
