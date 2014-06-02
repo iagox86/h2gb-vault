@@ -7,6 +7,8 @@ require 'tempfile'
 require 'elf'
 
 set :show_exceptions, false
+set :host, "0.0.0.0"
+set :port, 4567
 
 error do
   content_type :json
