@@ -12,14 +12,17 @@ set :bind, "0.0.0.0"
 set :port, 4567
 
 def get_file(params)
-  file = Tempfile.new('h2gb-babel')
-  file.write(params['file'])
-  file.close()
-  filename = file.path
+  if(params['file'].is_a?(Hash))
+    yield params['tmpfile']
+  else
+    file = Tempfile.new('h2gb-babel')
+    file.write(params['file'])
+    file.close()
 
-  yield file.path
+    yield file.path
 
-  file.unlink()
+    file.unlink()
+  end
 end
 
 error do
