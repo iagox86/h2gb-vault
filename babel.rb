@@ -5,7 +5,7 @@ require 'sinatra'
 require 'tempfile'
 
 require 'elf'
-#require 'pe'
+require 'pe'
 
 set :show_exceptions, false
 set :bind, "0.0.0.0"
@@ -56,7 +56,15 @@ post '/parse/elf' do
 end
 
 post '/parse/pe' do
-  
+  content_type :json
+  data = nil
+  get_file(params) do |filename|
+    data = parse_pe(filename, true)
+  end
+
+  data[:status] = 1
+
+  return JSON.pretty_generate(data) + "\n"
 end
 
 get '/test' do

@@ -32,9 +32,7 @@ def parse_elf(filename, include_data = false)
     section = {
       :name        => s.name,
       :addr        => s.addr,
-      :addralign   => s.addralign,
       :flags       => s.flags,
-      :entsize     => s.entsize,
       :file_offset => s.offset,
       :file_size   => s.size,
     }
