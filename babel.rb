@@ -97,10 +97,15 @@ end
 
 # Add important headers and encode everything as JSON
 after do
-  content_type 'application/json'
+  if(response.content_type.nil?)
+    content_type 'application/json'
+  end
+
   headers({ 'X-Frame-Options' => 'DENY' })
 
-  response.body = JSON.pretty_generate(response.body) + "\n"
+  if(response.content_type =~ /json/)
+    response.body = JSON.pretty_generate(response.body) + "\n"
+  end
 end
 
 # Handle errors (exceptions and stuff)
@@ -173,4 +178,17 @@ post('/parse') do
     parsed= parse(filename, params['format'])
     return add_status(parsed, 0)
   end
+end
+
+
+
+get('/test') do
+  content_type "text/html"
+
+  return "<html>
+    <form method='post' action='/upload' enctype='multipart/form-data'>
+      <input type='file' name='file'>
+      <input type='submit'>
+    </form>
+  </html>"
 end
