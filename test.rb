@@ -122,7 +122,6 @@ puts()
 puts("Testing x86 diassembling (direct)")
 puts()
 
-files = {}
 dir = File.dirname(__FILE__)
 Dir.entries(dir + '/examples').each do |file|
   if(file !~ /^x86/)
@@ -141,7 +140,45 @@ Dir.entries(dir + '/examples').each do |file|
     puts(result.inspect)
     exit
   else
-    puts(result.inspect)
+    puts("Success!")
+    puts(result)
   end
 end
 
+puts()
+puts("Testing x86 diassembling (w/ upload)")
+puts()
+
+files = []
+dir = File.dirname(__FILE__)
+Dir.entries(dir + '/examples').each do |file|
+  if(file !~ /^x86/)
+    next
+  end
+
+  file = dir + "/examples/" + file
+
+  data = IO.read(file)
+  data.force_encoding("ASCII-8BIT") # This is necessary, since it's how the file comes back
+
+  result = HTTMultiParty.post(SERVICE + "/upload", :body => {:file => File.new(file)})
+  result = result.parsed_response
+  if(result['status'] != 0)
+    puts("ERROR:")
+    puts(result.inspect)
+    exit
+  else
+    files << result['id']
+  end
+end
+
+files.each do |id|
+  result = HTTParty.get(SERVICE + "/disasm/x86/" + id)
+  if(result['status'] != 0)
+    puts("ERROR:")
+    puts(result.inspect)
+    exit
+  else
+    puts(result)
+  end
+end

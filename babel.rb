@@ -198,13 +198,15 @@ post '/disasm/x86/' do
 end
 
 get(/^\/disasm\/x86\/([a-fA-F0-9-]+)/) do |id|
-  data = id_to_file(id, params)
+  data = id_to_data(id, params)
+
+  puts(data.unpack("H*"))
 
   result = {
     :instructions => disassemble_x86(data, 32)
   }
 
-  return add_status(result, 2)
+  return add_status(result, 0)
 end
 
 post '/disasm/x64/' do
@@ -217,14 +219,14 @@ post '/disasm/x64/' do
 end
 
 get(/^\/disasm\/x64\/([a-fA-F0-9-]+)/) do |id|
-  data = id_to_file(id, params)
+  data = id_to_data(id, params)
 
   result = {
     :instructions => disassemble_x86(data, 64)
   }
 
 
-  return add_status(result, 2)
+  return add_status(result, 0)
 end
 
 get('/test') do
