@@ -11,6 +11,8 @@ require 'pp' # debug
 require 'elf'
 require 'pe'
 
+require 'x86'
+
 set :show_exceptions, false
 set :bind, "0.0.0.0"
 set :port, 4567
@@ -71,6 +73,13 @@ def id_to_file(id, verify = false)
   end
 
   return UPLOADS + id
+end
+
+def id_to_data(id, params)
+  size   = params['size']   ? params['size'].to_i   : nil
+  offset = params['offset'] ? params['offset'].to_i : nil
+
+  return IO.read(id_to_file(id, true), size, offset)
 end
 
 def parse(filename, format = nil)
@@ -154,9 +163,7 @@ get(/^\/download\/([a-fA-F0-9-]+)$/) do |id|
 
   headers({ 'Content-Disposition' => 'Attachment' })
 
-  size   = params['size']   ? params['size'].to_i   : nil
-  offset = params['offset'] ? params['offset'].to_i : nil
-  data = IO.read(id_to_file(id, true), size, offset)
+  data = id_to_data(id, params)
 
   return {
     :status => 0,
@@ -175,12 +182,50 @@ end
 
 post('/parse') do
   get_temp_file do |filename|
-    parsed= parse(filename, params['format'])
+    parsed = parse(filename, params['format'])
     return add_status(parsed, 0)
   end
 end
 
+post '/disasm/x86/' do
+  get_file_data(params) do |data|
+    result = {
+      :instructions => disassemble_x86(data, 32)
+    }
 
+    return add_status(result, 0)
+  end
+end
+
+get(/^\/disasm\/x86\/([a-fA-F0-9-]+)/) do |id|
+  data = id_to_file(id, params)
+
+  result = {
+    :instructions => disassemble_x86(data, 32)
+  }
+
+  return add_status(result, 2)
+end
+
+post '/disasm/x64/' do
+  get_file_data(params) do |data|
+    result = {
+      :instructions => disassemble_x86(data, 64)
+    }
+    return add_status(result, 0)
+  end
+end
+
+get(/^\/disasm\/x64\/([a-fA-F0-9-]+)/) do |id|
+  data = id_to_file(id, params)
+
+  result = {
+    :instructions => disassemble_x86(data, 64)
+  }
+
+
+  return add_status(result, 2)
+end
 
 get('/test') do
   content_type "text/html"

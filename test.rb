@@ -16,7 +16,7 @@ puts()
 files = {}
 dir = File.dirname(__FILE__)
 Dir.entries(dir + '/examples').each do |file|
-  if(file =~ /\./)
+  if(file !~ /^elf/ && file !~ /^pe/)
     next
   end
 
@@ -117,3 +117,31 @@ files.each_pair do |id, file|
     puts("Failed to parse #{id}: #{result.inspect}")
   end
 end
+
+puts()
+puts("Testing x86 diassembling (direct)")
+puts()
+
+files = {}
+dir = File.dirname(__FILE__)
+Dir.entries(dir + '/examples').each do |file|
+  if(file !~ /^x86/)
+    next
+  end
+
+  file = dir + "/examples/" + file
+
+  data = IO.read(file)
+  data.force_encoding("ASCII-8BIT") # This is necessary, since it's how the file comes back
+
+  result = HTTMultiParty.post(SERVICE + "/disasm/x86/", :body => {:file => File.new(file)})
+  result = result.parsed_response
+  if(result['status'] != 0)
+    puts("ERROR:")
+    puts(result.inspect)
+    exit
+  else
+    puts(result.inspect)
+  end
+end
+
