@@ -82,22 +82,25 @@ def id_to_data(id, params)
   return IO.read(id_to_file(id, true), size, offset)
 end
 
-def parse(filename, format = nil)
+def parse(filename, options = {})
+  format = options[:format]
+  id     = options[:id]
+
   if(format.nil?)
     header = IO.read(filename, 4, 0)
     if(header == "\x7FELF")
-      return parse_elf(filename)
+      return parse_elf(filename, id)
     elsif(header == "MZ\x90\x00")
-      return parse_pe(filename)
+      return parse_pe(filename, id)
     else
       raise(Exception, "Couldn't auto-determine format for #{filename}")
     end
   else
     format = params['format']
     if(format.downcase() == 'elf')
-      return parse_elf(filename)
+      return parse_elf(filename, id)
     elsif(format.downcase() == 'pe')
-      return parse_pe(filename)
+      return parse_pe(filename, id)
     else
       raise(Exception, "Unknown format")
     end
@@ -176,13 +179,13 @@ end
 
 get(/^\/parse\/([a-fA-F0-9-]+)$/) do |id|
   file = id_to_file(id, true)
-  parsed = parse(file, params['format'])
+  parsed = parse(file, :format => params['format'], :id => id)
   return add_status(parsed, 0)
 end
 
 post('/parse') do
   get_temp_file do |filename|
-    parsed = parse(filename, params['format'])
+    parsed = parse(filename, :format => params['format'])
     return add_status(parsed, 0)
   end
 end

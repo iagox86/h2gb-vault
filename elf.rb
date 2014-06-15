@@ -1,7 +1,7 @@
 require 'base64'
 require 'metasm'
 
-def parse_elf(filename, include_data = false)
+def parse_elf(filename, id)
   elf = {}
 
   e = Metasm::ELF.decode_file(filename)
@@ -38,8 +38,10 @@ def parse_elf(filename, include_data = false)
     }
 
     # Only do this if they requested the file data
-    if(include_data)
+    if(id.nil?)
       section[:data] = Base64.encode64(IO.read(filename, s.size, s.offset))
+    else
+      section[:data_ref] = "/download/#{id}?offset=#{s.offset}&size=#{s.size}"
     end
 
     elf[:sections] << section
