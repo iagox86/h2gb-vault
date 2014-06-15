@@ -1,4 +1,4 @@
-$LOAD_PATH << '.'
+$LOAD_PATH << File.dirname(__FILE__)
 
 require 'fileutils'
 require 'json'
@@ -232,13 +232,8 @@ get(/^\/disasm\/x64\/([a-fA-F0-9-]+)/) do |id|
   return add_status(result, 0)
 end
 
-get('/test') do
+get(/\/static\/([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/) do |file|
   content_type "text/html"
 
-  return "<html>
-    <form method='post' action='/upload' enctype='multipart/form-data'>
-      <input type='file' name='file'>
-      <input type='submit'>
-    </form>
-  </html>"
+  return IO.read(File.dirname(__FILE__) + "/static/#{file}")
 end
