@@ -1,7 +1,46 @@
 <html>
   <head>
+    <script src='/static/jquery.js'></script>
+    <script>
+      function load(id)
+      {
+        $('#list_container').hide();
+        $('#top_container').show();
+
+        $('#top_container').html("<p><a href='#' onClick='show_list()'>Show files</a></p>");
+        $.getJSON("/parse/" + id, {}, function(data) {
+          $('#top_container').append(JSON.stringify(data, null, 4));
+        });
+      }
+
+      function show_list()
+      {
+        $('#list_container').show();
+        $('#top_container').hide();
+        $.getJSON("/list", {}, function(data) {
+          for(key in data) {
+            value = data[key];
+            $('#list').append("<li><a href='#" + value + "' onClick=load('" + value + "');>" + value + "</a></li>");
+          }
+        });
+      }
+
+      $(document).ready(function() {
+        if(document.location.hash == "" || document.location.hash == '#')
+        {
+          show_list();
+        }
+        else
+        {
+          load(document.location.hash.substring(1));
+        }
+      });
+
+    </script>
   </head>
 
   <body>
+    <div id="list_container" style="display: none;"><ul id="list"></ul></div>
+    <div id="top_container" style="display: none;"></div>
   </body>
 </html>

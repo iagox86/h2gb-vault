@@ -232,8 +232,24 @@ get(/^\/disasm\/x64\/([a-fA-F0-9-]+)/) do |id|
   return add_status(result, 0)
 end
 
+get('/list') do
+  list = []
+  Dir.entries(UPLOADS).each() do |e|
+    if(e =~ /[a-fA-F0-9-]+/)
+      list << e
+    end
+  end
+  return list
+end
+
 get(/\/static\/([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/) do |file|
-  content_type "text/html"
+  if(file =~ /\.html$/)
+    content_type "text/html"
+  elsif(file =~ /\.js$/)
+    content_type "text/javascript"
+  else
+    raise(Exception, "Unknown filetype")
+  end
 
   return IO.read(File.dirname(__FILE__) + "/static/#{file}")
 end
