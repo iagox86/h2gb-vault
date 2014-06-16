@@ -203,8 +203,6 @@ end
 get(/^\/disasm\/x86\/([a-fA-F0-9-]+)/) do |id|
   data = id_to_data(id, params)
 
-  puts(data.unpack("H*"))
-
   result = {
     :instructions => disassemble_x86(data, 32)
   }
