@@ -2,7 +2,9 @@ require 'base64'
 require 'metasm'
 
 def parse_pe(filename, id)
-  pe = {}
+  pe = {
+    :format => "PE"
+  }
 
   e = Metasm::PE.decode_file(filename)
 
@@ -12,7 +14,7 @@ def parse_pe(filename, id)
     :sect_align   => e.optheader.sect_align,
     :code_size    => e.optheader.code_size,
     :data_size    => e.optheader.data_size,
-    :entry        => e.optheader.entrypoint,
+    :entrypoint   => e.optheader.entrypoint,
     :base_of_code => e.optheader.base_of_code,
   }
 
@@ -33,7 +35,7 @@ def parse_pe(filename, id)
     if(id.nil?)
       section[:data] = Base64.encode64(IO.read(filename, section[:file_size], section[:file_offset]))
     else
-      section[:data_ref] = "/download/#{id}?offset=#{section[:file_offset]}&size=#{section[:file_size]}"
+      section[:data_ref] = "#{id}?offset=#{section[:file_offset]}&size=#{section[:file_size]}"
     end
 
     pe[:sections] << section

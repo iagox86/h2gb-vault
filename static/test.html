@@ -2,14 +2,71 @@
   <head>
     <script src='/static/jquery.js'></script>
     <script>
+      function try_disassemble(name, data_ref)
+      {
+        e = $('#code_' + name);
+        e.html("Working...");
+
+        $.getJSON("/disasm/x86/" + data_ref, {}, function(data) {
+          e.html('Hello');
+
+          e.append("<table>");
+          for(i in data['instructions'])
+          {
+            i = data['instructions'][i];
+            e.append("<tr>");
+            e.append("<td>0x" + i['address'].toString(16) + "</td>");
+            e.append("<td>" + i['name'] + "</td>");
+            e.append("<td>" + i['args'].join(', ') + "</td>");
+          }
+          e.append("</table>");
+
+          e.append("<input type='button' onClick=\"$('#json_" + name + "').toggle()\" value='Toggle raw'>");
+          e.append("<pre id='json_" + name + "' style='display: none;'>" + JSON.stringify(data, null, 4) + "</pre>");
+        })
+      }
+
       function load(id)
       {
         $('#list_container').hide();
         $('#top_container').show();
 
-        $('#top_container').html("<p><a href='#' onClick='show_list()'>Show files</a></p>");
+        out = $('#top_container');
+
+        /* Clear it. */
+        out.html('');
+
+        /* Let the user exit this view. */
+        out.append("<p><a href='#' onClick='show_list()'>Show files</a></p>");
+
+        /* TODO: This is going away. */
         $.getJSON("/parse/" + id, {}, function(data) {
-          $('#top_container').append(JSON.stringify(data, null, 4));
+          out.append("<p>Format: " + data['format'] + "</p>");
+
+          out.append("<p>Header:</p>");
+          out.append("<table>");
+          out.append("<tr><th width='200' style='text-align: left;'>Name</th><th width='500' style='text-align: left;'>Value</th></tr>");
+
+          if(typeof data['header']['base'] != "undefined")
+            out.append("<tr><td>Base address</td><td>0x" + data['header']['base'].toString(16) + "</td></tr>");
+          out.append("<tr><td>Entrypoint</td><td>0x" + data['header']['entrypoint'].toString(16) + "</td></tr>");
+          out.append("</table>");
+
+          for(section in data['sections'])
+          {
+            section = data['sections'][section];
+            name = section['name'];
+            name = name.replace(/[^a-zA-Z0-9_]/g, '_');
+
+            out.append("<p>Section " + section['name'] + "</p>");
+            out.append("<div id='code_" + name + "'><input type='button' value='Try to disassemble' onClick='try_disassemble(\"" + name + "\", \"" + section['data_ref'] + "\")'></p>");
+            out.append("<hr>");
+
+          }
+
+          out.append("<hr>");
+          out.append("<input type='button' onClick=\"$('#json').toggle()\" value='Toggle'>");
+          $('#top_container').append("<div id='json'><pre>" + JSON.stringify(data, null, 4) + "</pre></div>");
         });
       }
 
@@ -40,7 +97,10 @@
   </head>
 
   <body>
-    <div id="list_container" style="display: none;"><ul id="list"></ul></div>
-    <div id="top_container" style="display: none;"></div>
+    <div id="list_container" style="display: none;">
+      <ul id="list"></ul>
+    </div>
+    <div id="top_container" style="display: none;">
+    </div>
   </body>
 </html>
