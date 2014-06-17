@@ -18,8 +18,6 @@ def parse_pe(filename, id)
     :base_of_code => e.optheader.base_of_code,
   }
 
-  # Segments TODO
-
   # Sections
   pe[:sections] = []
   e.sections.each do |s|

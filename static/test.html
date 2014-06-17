@@ -52,6 +52,28 @@
           out.append("<tr><td>Entrypoint</td><td>0x" + data['header']['entrypoint'].toString(16) + "</td></tr>");
           out.append("</table>");
 
+          out.append("<h1>Imports</h1>");
+          out.append("<p><input type='button' value='Toggle imports' onClick='$(\"#imports\").toggle();' /></p>");
+
+          imports = "";
+          imports += "<table id='imports' style='display: none;'>";
+          imports += "<tr><th width='200' style='text-align: left;'>Library</th><th width='500' style='text-align: left;'>Hint</th><th width='500' style='text-align: left;'>Target</th></tr>";
+          for(i in data['imports'])
+          {
+            for(j in data['imports'][i])
+            {
+              imports += "<tr>";
+              imports += "<td>" + i + "</td>";
+              imports += "<td>0x" + data['imports'][i][j]['hint'].toString(16) + "</td>";
+              imports += "<td>" + data['imports'][i][j]['target'].toString(16) + "</td>";
+              imports += "</tr>";
+            }
+          }
+          imports += "</table>";
+          imports += "</div>";
+
+          out.append(imports);
+
           for(section in data['sections'])
           {
             section = data['sections'][section];
