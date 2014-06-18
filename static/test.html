@@ -70,8 +70,10 @@
             {
               imports += "<tr>";
               imports += "<td>" + i + "</td>";
-              imports += "<td>0x" + data['imports'][i][j]['hint'].toString(16) + "</td>";
-              imports += "<td>" + data['imports'][i][j]['target'].toString(16) + "</td>";
+              if(data['imports'][i][j]['hint'])
+                imports += "<td>0x" + data['imports'][i][j]['hint'].toString(16) + "</td>";
+              if(data['imports'][i][j]['target'])
+                imports += "<td>" + data['imports'][i][j]['target'].toString(16) + "</td>";
               imports += "</tr>";
             }
           }
