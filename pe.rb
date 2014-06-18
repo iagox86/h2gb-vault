@@ -52,6 +52,7 @@ def parse_pe(filename, id)
   end
 
   pe[:exports] = []
+
   if(!e.export.nil?)
     e.export.exports.each do |export|
       pe[:exports] << {
@@ -59,9 +60,12 @@ def parse_pe(filename, id)
         :forwarder_lib  => export.forwarder_lib,
         :forwarder_name => export.forwarder_name,
         :name           => export.name,
+        :address        => export.target_rva,
       }
     end
   end
 
   return pe
 end
+
+#puts parse_pe("uploads/fb0e3013-8dda-4d6f-9657-cfc42cee8f25", "uploads/fb0e3013-8dda-4d6f-9657-cfc42cee8f25")

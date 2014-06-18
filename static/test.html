@@ -86,11 +86,12 @@
           out.append("<p><input type='button' value='Toggle exports' onClick='$(\"#exports\").toggle();' /></p>");
           exports = "";
           exports += "<table id='exports' style='display: none;'>";
-          exports += "<tr><th width='200' style='text-align: left;'>Ordinal</th><th width='500' style='text-align: left;'>Name</th></tr>";
+            exports += "<tr><th width='200' style='text-align: left;'>Address</th><th width='200' style='text-align: left;'>Ordinal</th><th width='500' style='text-align: left;'>Name</th></tr>";
           for(e in data['exports'])
           {
             e = data['exports'][e];
             exports += "<tr>";
+            exports += "<td>0x" + e['address'].toString(16) + "</td>";
             exports += "<td>" + e['ordinal'] + "</td>";
             exports += "<td>" + e['name'] + "</td>";
             exports += "</tr>";
