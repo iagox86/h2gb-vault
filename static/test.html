@@ -2,6 +2,10 @@
   <head>
     <script src='/static/jquery.js'></script>
     <script>
+      function to_hex_string(data)
+      {
+        return (data.split('').map (function (c) { return (c.charCodeAt(0) < 16 ? '0' : '') + c.charCodeAt(0).toString(16); })).join(' ')
+      }
       function try_disassemble(name, data_ref)
       {
         e = $('#code_' + name);
@@ -13,8 +17,10 @@
           for(i in data['instructions'])
           {
             i = data['instructions'][i];
+
             e.append("<tr>");
             e.append("<td>0x" + i['address'].toString(16) + "</td>");
+            e.append("<td>" + to_hex_string(atob(i['bytes'])) + "</td>");
             e.append("<td>" + i['name'] + "</td>");
             e.append("<td>" + i['args'].join(', ') + "</td>");
           }
@@ -37,6 +43,7 @@
 
         /* Let the user exit this view. */
         out.append("<p><a href='#' onClick='show_list()'>Show files</a></p>");
+        out.append('Working...');
 
         /* TODO: This is going away. */
         $.getJSON("/parse/" + id, {}, function(data) {
