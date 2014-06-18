@@ -122,7 +122,7 @@ end
 
 # Handle errors (exceptions and stuff)
 error do
-  status 400
+  status 200
 
   return {
     :status => 400,
