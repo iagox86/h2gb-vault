@@ -8,8 +8,7 @@
         e.html("Working...");
 
         $.getJSON("/disasm/x86/" + data_ref, {}, function(data) {
-          e.html('Hello');
-
+          e.html('');
           e.append("<table>");
           for(i in data['instructions'])
           {
@@ -73,6 +72,24 @@
           imports += "</div>";
 
           out.append(imports);
+
+          out.append("<h1>Exports</h1>");
+          out.append("<p><input type='button' value='Toggle exports' onClick='$(\"#exports\").toggle();' /></p>");
+          exports = "";
+          exports += "<table id='exports' style='display: none;'>";
+          exports += "<tr><th width='200' style='text-align: left;'>Ordinal</th><th width='500' style='text-align: left;'>Name</th></tr>";
+          for(e in data['exports'])
+          {
+            e = data['exports'][e];
+            exports += "<tr>";
+            exports += "<td>" + e['ordinal'] + "</td>";
+            exports += "<td>" + e['name'] + "</td>";
+            exports += "</tr>";
+          }
+          exports += "</table>";
+          exports += "</div>";
+
+          out.append(exports);
 
           for(section in data['sections'])
           {
