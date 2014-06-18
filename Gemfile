@@ -6,3 +6,4 @@ gem 'httmultiparty'
 
 gem 'metasm'      # For most of the disassembling / etc
 gem 'sinatra'     # Web server
+gem 'pg'          # Postgres

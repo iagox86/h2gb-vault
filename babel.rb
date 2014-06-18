@@ -144,6 +144,20 @@ get '/' do
   return 'Welcome to h2gb! '
 end
 
+post '/upload_html' do
+  content_type 'text/html'
+
+  get_file_data(params) do |data|
+    id = SecureRandom.uuid
+    File.open(id_to_file(id), "wb") do |f|
+      f.write(data)
+      f.close()
+    end
+
+    redirect to('/static/test.html#' + id)
+  end
+end
+
 post '/upload' do
   get_file_data(params) do |data|
     id = SecureRandom.uuid

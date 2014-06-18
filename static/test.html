@@ -39,14 +39,14 @@
         out = $('#top_container');
 
         /* Clear it. */
-        out.html('');
+        out.html("<p><a href='#' onClick='show_list()'>Show files</a></p>");
 
         /* Let the user exit this view. */
-        out.append("<p><a href='#' onClick='show_list()'>Show files</a></p>");
         out.append('Working...');
 
         /* TODO: This is going away. */
         $.getJSON("/parse/" + id, {}, function(data) {
+          out.html("<p><a href='#' onClick='show_list()'>Show files</a></p>");
           out.append("<p>Format: " + data['format'] + "</p>");
 
           out.append("<p>Header:</p>");
@@ -145,7 +145,7 @@
   <body>
     <div id="list_container" style="display: none;">
       <p>You can upload files here; you should get the id back as JSON, which will then appear in the list (yeah, that's ugly, but that's what you get for now :) )</p>
-      <form action='/upload' method='post' enctype='multipart/form-data'>
+      <form action='/upload_html' method='post' enctype='multipart/form-data'>
         <input type='file' name='file' />
         <input type='submit' name='upload' />
       </form>
