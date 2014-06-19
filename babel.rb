@@ -1,9 +1,11 @@
 $LOAD_PATH << File.dirname(__FILE__)
 
+require 'sinatra'
+require 'sinatra/activerecord'
+
 require 'fileutils'
 require 'json'
 require 'securerandom'
-require 'sinatra'
 require 'tempfile'
 
 require 'pp' # debug
@@ -13,6 +15,17 @@ require 'pe'
 
 require 'x86'
 
+# Database stuff
+ActiveRecord::Base.establish_connection(
+  :adapter => 'sqlite3',
+  :host    => nil,
+  :username => nil,
+  :password => nil,
+  :database => 'data.db',
+  :encoding => 'utf8',
+)
+
+# Sinatra stuff
 set :show_exceptions, false
 set :bind, "0.0.0.0"
 set :port, 4567
