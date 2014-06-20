@@ -49,20 +49,31 @@ def parse_elf(filename, id)
     elf[:sections] << section
   end
 
-  # Relocations
-  elf[:relocations] = []
-  e.relocations.each do |s|
-
-    relocation = {
-      :name   => s.symbol.name,
-      :offset => s.offset,
-      :type   => s.type,
-      :bind   => s.symbol.bind,
+  elf[:symbols] = []
+  e.symbols.each do |s|
+    symbol = {
+      :name =>   s.name,
+      :type =>   s.type,
+      :offset => s.value,
+      :size =>   s.size,
     }
 
-    elf[:relocations] << relocation
+    elf[:symbols] << symbol
   end
+
+  # Relocations
+#  elf[:relocations] = []
+#  e.relocations.each do |s|
+#
+#    relocation = {
+#      :name   => s.symbol.name,
+#      :offset => s.offset,
+#      :type   => s.type,
+#      :bind   => s.symbol.bind,
+#    }
+#
+#    elf[:relocations] << relocation
+#  end
 
   return elf
 end
-
