@@ -1,11 +1,113 @@
 <html>
   <head>
+  <style> th { text-align: left; } </style>
+
     <script src='/static/jquery.js'></script>
     <script>
       function to_hex_string(data)
       {
         return (data.split('').map (function (c) { return (c.charCodeAt(0) < 16 ? '0' : '') + c.charCodeAt(0).toString(16); })).join(' ')
       }
+
+      function load_header(id)
+      {
+        var div = $("<div>Loading header...</div>")
+
+        $.getJSON("/header/" + id, {}, function(data) {
+          table = $('<table></table>');
+          table.append($("<tr><td>Name</td><td>Value</td></tr>"));
+
+          if(typeof data['header']['base'] != "undefined")
+            table.append($("<td>Base address</td><td>0x" + data['header']['base'].toString(16) + "</td></tr>"));
+          table.append("<tr><td>Entrypoint</td><td>0x" + data['header']['entrypoint'].toString(16) + "</td></tr>");
+
+          div.html(table)
+        })
+
+        return div
+      }
+
+      function load_symbols(id)
+      {
+        var div = $("<div>Loading symbols...<//div>")
+
+        $.getJSON("/symbols/" + id, {}, function(data) {
+          table = $("<table></table>");
+
+          table.append("<tr><th width='200'>Address</th><th width='500'>Name</th><th width='200'>Size</th></tr>");
+          for(s in data['symbols'])
+          {
+            s = data['symbols'][s];
+
+            row = $('<tr></tr>');
+            row.append($("<td>0x" + s['offset'].toString(16) + "</td>"));
+            row.append($("<td>"   + s['name'] + "</td>"));
+            row.append($("<td>0x" + s['size'].toString(16) + "</td>"));
+
+            table.append(row);
+          }
+
+          div.html(table);
+        })
+
+        return div
+      }
+
+      function load_imports(id)
+      {
+        var div = $("<div>Loading imports...</div>");
+
+        $.getJSON("/imports/" + id, {}, function(data) {
+          table = $("<table></table>");
+
+          table.append("<tr><th width='200'>Address</th><th width='500'>Target</th><th width='200'>Hint</th></tr>");
+          for(i in data['imports'])
+          {
+            for(j in data['imports'][i])
+            {
+              row = $('<tr></tr>');
+              row.append("<td>" + i + "</td>");
+              if(data['imports'][i][j]['target'])
+                row.append($("<td>" + data['imports'][i][j]['target'].toString(16) + "</td>"));
+              if(data['imports'][i][j]['hint'])
+                row.append($("<td>0x" + data['imports'][i][j]['hint'].toString(16) + "</td>"));
+
+              table.append(row);
+            }
+          }
+
+          div.html(table);
+        })
+
+        return div;
+      }
+
+      function load_exports(id)
+      {
+        var div = $("<div>Loading exports...</div>");
+
+        $.getJSON("/exports/" + id, {}, function(data) {
+          table = $("<table></table>");
+
+          table.append("<tr><th width='200'>Address</th><th width='200'>Ordinal</th><th width='500'>Name</th></tr>");
+          for(e in data['exports'])
+          {
+            e = data['exports'][e];
+
+            row = $('<tr></tr>');
+            row.append($("<td>0x" + e['address'].toString(16) + "</td>"));
+            row.append($("<td>" + e['ordinal'] + "</td>"));
+            row.append($("<td>" + e['name'] + "</td>"));
+
+            table.append(row);
+          }
+
+          div.html(table);
+        })
+
+        return div;
+      }
+
       function try_disassemble(name, data_ref)
       {
         e = $('#code_' + name);
@@ -31,95 +133,57 @@
         })
       }
 
+      function create_loadable(name, load_function, params)
+      {
+        var out         = $("<div></div>");
+        var placeholder = $("<div id='" + name + "_placeholder'>Click to load</div>");
+        var main        = $("<div id='" + name + "' style='display: none;'></div>");
+        placeholder.click(function() {
+          $(this).hide();
+
+          hide = $("<input type='button' value='hide'>")
+          hide.click(function() {
+            $('#' + name + '_placeholder').show();
+            $('#' + name).hide();
+            $('#' + name).text('');
+          })
+
+          $('#' + name).show();
+          $('#' + name).append(hide);
+          $('#' + name).append(load_function.apply(this, params));
+        })
+
+        out.append(placeholder);
+        out.append(main);
+
+        return out;
+      }
+
       function load(id)
       {
         $('#list_container').hide();
         $('#top_container').show();
 
-        out = $('#top_container');
+        var out = $('#top_container');
 
-        /* Clear it. */
         out.html("<p><a href='#' onClick='show_list()'>Show files</a></p>");
 
-        /* Let the user exit this view. */
         out.append('Working...');
+
+        out.append("<h1>Header</h1>");
+        out.append(create_loadable('header', load_header, [id]))
+
+        out.append($('<h1>Symbols</h1>'));
+        out.append(create_loadable('symbols', load_symbols, [id]));
+
+        out.append($('<h1>Imports</h1>'));
+        out.append(create_loadable('imports', load_imports, [id]));
+
+        out.append($('<h1>Exports</h1>'));
+        out.append(create_loadable('exports', load_exports, [id]));
 
         /* TODO: This is going away. */
         $.getJSON("/parse/" + id, {}, function(data) {
-          out.html("<p><a href='#' onClick='show_list()'>Show files</a></p>");
-          out.append("<p>Format: " + data['format'] + "</p>");
-
-          out.append("<p>Header:</p>");
-          out.append("<table>");
-          out.append("<tr><th width='200' style='text-align: left;'>Name</th><th width='500' style='text-align: left;'>Value</th></tr>");
-
-          if(typeof data['header']['base'] != "undefined")
-            out.append("<tr><td>Base address</td><td>0x" + data['header']['base'].toString(16) + "</td></tr>");
-          out.append("<tr><td>Entrypoint</td><td>0x" + data['header']['entrypoint'].toString(16) + "</td></tr>");
-          out.append("</table>");
-
-          out.append("<h1>Imports</h1>");
-          out.append("<p><input type='button' value='Toggle imports' onClick='$(\"#imports\").toggle();' /></p>");
-
-          imports = "";
-          imports += "<table id='imports' style='display: none;'>";
-          imports += "<tr><th width='200' style='text-align: left;'>Library</th><th width='500' style='text-align: left;'>Hint</th><th width='500' style='text-align: left;'>Target</th></tr>";
-          for(i in data['imports'])
-          {
-            for(j in data['imports'][i])
-            {
-              imports += "<tr>";
-              imports += "<td>" + i + "</td>";
-              if(data['imports'][i][j]['hint'])
-                imports += "<td>0x" + data['imports'][i][j]['hint'].toString(16) + "</td>";
-              if(data['imports'][i][j]['target'])
-                imports += "<td>" + data['imports'][i][j]['target'].toString(16) + "</td>";
-              imports += "</tr>";
-            }
-          }
-          imports += "</table>";
-          imports += "</div>";
-
-          out.append(imports);
-
-          out.append("<h1>Exports</h1>");
-          out.append("<p><input type='button' value='Toggle exports' onClick='$(\"#exports\").toggle();' /></p>");
-          exports = "";
-          exports += "<table id='exports' style='display: none;'>";
-            exports += "<tr><th width='200' style='text-align: left;'>Address</th><th width='200' style='text-align: left;'>Ordinal</th><th width='500' style='text-align: left;'>Name</th></tr>";
-          for(e in data['exports'])
-          {
-            e = data['exports'][e];
-            exports += "<tr>";
-            exports += "<td>0x" + e['address'].toString(16) + "</td>";
-            exports += "<td>" + e['ordinal'] + "</td>";
-            exports += "<td>" + e['name'] + "</td>";
-            exports += "</tr>";
-          }
-          exports += "</table>";
-          exports += "</div>";
-          out.append(exports);
-
-          out.append("<h1>Symbols</h1>")
-          out.append("<p><input type='button' value='Toggle symbols' onClick='$(\"#symbols\").toggle();' /></p>");
-          symbols = "";
-            symbols += "<table id='symbols'>";
-          //symbols += "<table id='symbols' style='display: none;'>";
-          symbols += "<tr><th width='200' style='text-align: left;'>Address</th><th width='500' style='text-align: left;'>Name</th><th width='200' style='text-align: left;'>Size</th></tr>";
-          for(s in data['symbols'])
-          {
-            s = data['symbols'][s];
-            console.log(s);
-            symbols += "<tr>";
-            symbols += "<td>0x" + s['offset'].toString(16) + "</td>";
-            symbols += "<td>" + s['name'] + "</td>";
-            symbols += "<td>0x" + s['size'].toString(16) + "</td>";
-            symbols += "</tr>";
-          }
-          symbols += "</table>";
-          symbols += "</div>";
-          out.append(symbols);
-
           for(section in data['sections'])
           {
             section = data['sections'][section];
