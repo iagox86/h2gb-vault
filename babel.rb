@@ -57,20 +57,6 @@ def get_file_data(params)
   end
 end
 
-def try_get()
-  return {
-    :status => 404,
-    :msg    => "Try using GET!"
-  }
-end
-
-def try_post()
-  return {
-    :status => 404,
-    :msg    => "Try using POST!"
-  }
-end
-
 def add_status(table, status = 0)
   table[:status] = status
 
@@ -159,20 +145,6 @@ get '/' do
   return 'Welcome to h2gb! '
 end
 
-post '/upload_html' do
-  content_type 'text/html'
-
-  get_file_data(params) do |data|
-    id = SecureRandom.uuid
-    File.open(id_to_file(id), "wb") do |f|
-      f.write(data)
-      f.close()
-    end
-
-    redirect to('/static/test.html#' + id)
-  end
-end
-
 post '/upload' do
   get_file_data(params) do |data|
     id = SecureRandom.uuid
@@ -198,9 +170,6 @@ get(/^\/download\/(#{UUID})$/) do |id|
     :status => 0,
     :file => Base64.encode64(data)
   }
-end
-post(/\/download/) do
-  return try_get()
 end
 
 get(/^\/parse\/(#{UUID})$/) do |id|
@@ -264,6 +233,20 @@ get('/list') do
     end
   end
   return list
+end
+
+post '/upload_html' do
+  content_type 'text/html'
+
+  get_file_data(params) do |data|
+    id = SecureRandom.uuid
+    File.open(id_to_file(id), "wb") do |f|
+      f.write(data)
+      f.close()
+    end
+
+    redirect to('/static/test.html#' + id)
+  end
 end
 
 get(/^\/static\/([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)$/) do |file|
