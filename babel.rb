@@ -129,9 +129,9 @@ def handle_file_request(request, file, id, params)
       :status => 0,
       :file => Base64.encode64(data)
     }
-  when 'disassemble'
-    data = file_to_data(file, params)
-    return {:instructions => disassemble_x86(data, 32)}
+  when 'header'
+    parsed = parse(file, :format => params['format'], :id => id)
+    return {:header => parsed[:header]}
   when 'symbols'
     parsed = parse(file, :format => params['format'], :id => id)
     return {:symbols => parsed[:symbols]}
@@ -141,8 +141,15 @@ def handle_file_request(request, file, id, params)
   when 'exports'
     parsed = parse(file, :format => params['format'], :id => id)
     return {:exports => parsed[:exports]}
+  when 'disassemble'
+    data = file_to_data(file, params)
+    return {:instructions => disassemble_x86(data, 32)}
+
+  # XXX: I don't really wanna keep this one
   when 'parse'
-    return parse(file, :format => params['format'], :id => id)
+    parsed = parse(file, :format => params['format'], :id => id)
+    return parsed
+
   else
     raise(Exception, "Unknown request")
   end
@@ -157,7 +164,7 @@ after do
 
   if(response.content_type =~ /json/)
     # Default to a good status
-    if(response.body[:status].nil?)
+    if(response.body.is_a?(Hash) && response.body[:status].nil?)
       response.body[:status] = 0
     end
 
@@ -187,6 +194,7 @@ not_found do
 end
 
 get '/' do
+  content_type('text/html')
   return "Welcome to h2gb! If you don't know why you're seeing this, you probably don't need to be here :)"
 end
 

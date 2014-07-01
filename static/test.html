@@ -11,7 +11,7 @@
         e = $('#code_' + name);
         e.html("Working...");
 
-        $.getJSON("/disasm/x86/" + data_ref, {}, function(data) {
+        $.getJSON("/disassemble/" + data_ref, {}, function(data) {
           e.html('');
           e.append("<table>");
           for(i in data['instructions'])
@@ -98,8 +98,27 @@
           }
           exports += "</table>";
           exports += "</div>";
-
           out.append(exports);
+
+          out.append("<h1>Symbols</h1>")
+          out.append("<p><input type='button' value='Toggle symbols' onClick='$(\"#symbols\").toggle();' /></p>");
+          symbols = "";
+            symbols += "<table id='symbols'>";
+          //symbols += "<table id='symbols' style='display: none;'>";
+          symbols += "<tr><th width='200' style='text-align: left;'>Address</th><th width='500' style='text-align: left;'>Name</th><th width='200' style='text-align: left;'>Size</th></tr>";
+          for(s in data['symbols'])
+          {
+            s = data['symbols'][s];
+            console.log(s);
+            symbols += "<tr>";
+            symbols += "<td>0x" + s['offset'].toString(16) + "</td>";
+            symbols += "<td>" + s['name'] + "</td>";
+            symbols += "<td>0x" + s['size'].toString(16) + "</td>";
+            symbols += "</tr>";
+          }
+          symbols += "</table>";
+          symbols += "</div>";
+          out.append(symbols);
 
           for(section in data['sections'])
           {
@@ -121,8 +140,10 @@
 
       function show_list()
       {
-        $('#list_container').show();
         $('#top_container').hide();
+        $('#list_container').show();
+        $('#list').text('');
+
         $.getJSON("/list", {}, function(data) {
           for(key in data) {
             value = data[key];
