@@ -1,7 +1,7 @@
 $LOAD_PATH << File.dirname(__FILE__)
 
 require 'sinatra'
-require 'sinatra/activerecord'
+#require 'sinatra/activerecord'
 
 require 'fileutils'
 require 'json'
@@ -15,15 +15,17 @@ require 'pe'
 
 require 'x86'
 
-# Database stuff
-ActiveRecord::Base.establish_connection(
-  :adapter => 'sqlite3',
-  :host    => nil,
-  :username => nil,
-  :password => nil,
-  :database => 'data.db',
-  :encoding => 'utf8',
-)
+UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+
+## Database stuff
+#ActiveRecord::Base.establish_connection(
+#  :adapter => 'sqlite3',
+#  :host    => nil,
+#  :username => nil,
+#  :password => nil,
+#  :database => 'data.db',
+#  :encoding => 'utf8',
+#)
 
 # Sinatra stuff
 set :show_exceptions, false
@@ -76,7 +78,7 @@ def add_status(table, status = 0)
 end
 
 def id_to_file(id, verify = false)
-  if(id !~ /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+  if(id !~ /^#{UUID}$/)
     raise(Exception, "Bad UUID")
   end
 
@@ -185,11 +187,8 @@ post '/upload' do
     }
   end
 end
-get '/upload' do
-  return try_post()
-end
 
-get(/^\/download\/([a-fA-F0-9-]+)$/) do |id|
+get(/^\/download\/(#{UUID})$/) do |id|
 
   headers({ 'Content-Disposition' => 'Attachment' })
 
@@ -204,7 +203,7 @@ post(/\/download/) do
   return try_get()
 end
 
-get(/^\/parse\/([a-fA-F0-9-]+)$/) do |id|
+get(/^\/parse\/(#{UUID})$/) do |id|
   file = id_to_file(id, true)
   parsed = parse(file, :format => params['format'], :id => id)
   return add_status(parsed, 0)
@@ -227,7 +226,7 @@ post '/disasm/x86/' do
   end
 end
 
-get(/^\/disasm\/x86\/([a-fA-F0-9-]+)/) do |id|
+get(/^\/disasm\/x86\/(#{UUID})/) do |id|
   data = id_to_data(id, params)
 
   result = {
@@ -246,7 +245,7 @@ post '/disasm/x64/' do
   end
 end
 
-get(/^\/disasm\/x64\/([a-fA-F0-9-]+)/) do |id|
+get(/^\/disasm\/x64\/(#{UUID})/) do |id|
   data = id_to_data(id, params)
 
   result = {
@@ -260,14 +259,14 @@ end
 get('/list') do
   list = []
   Dir.entries(UPLOADS).each() do |e|
-    if(e =~ /[a-fA-F0-9-]+/)
+    if(e =~ /^#{UUID}$/)
       list << e
     end
   end
   return list
 end
 
-get(/\/static\/([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/) do |file|
+get(/^\/static\/([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)$/) do |file|
   if(file =~ /\.html$/)
     content_type "text/html"
   elsif(file =~ /\.js$/)
