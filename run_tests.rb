@@ -133,7 +133,7 @@ Dir.entries(dir + '/examples').each do |file|
   data = IO.read(file)
   data.force_encoding("ASCII-8BIT") # This is necessary, since it's how the file comes back
 
-  result = HTTMultiParty.post(SERVICE + "/disasm/x86/", :body => {:file => File.new(file)})
+  result = HTTMultiParty.post(SERVICE + "/disassemble/upload", :body => {:file => File.new(file)})
   result = result.parsed_response
   if(result['status'] != 0)
     puts("ERROR:")
@@ -173,7 +173,7 @@ Dir.entries(dir + '/examples').each do |file|
 end
 
 files.each do |id|
-  result = HTTParty.get(SERVICE + "/disasm/x86/" + id)
+  result = HTTParty.get(SERVICE + "/disassemble/" + id)
   if(result['status'] != 0)
     puts("ERROR:")
     puts(result.inspect)

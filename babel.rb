@@ -37,7 +37,16 @@ FileUtils.mkdir_p(UPLOADS)
 
 def get_temp_file(params)
   if(params['file'].is_a?(Hash))
-    yield params['tempfile']
+    file = params['file']
+    puts(file[:tempfile])
+
+    if(!file[:tempfile].nil?)
+      yield file[:tempfile]
+    elsif(!file['tempfile'].nil?)
+      yield file[:tempfile]
+    else
+      raise(Exception, "Couldn't figure out the filename for the uploaded file")
+    end
   else
     file = Tempfile.new('h2gb-babel')
     file.write(params['file'])
@@ -55,12 +64,6 @@ def get_file_data(params)
   else
     yield(params['file'])
   end
-end
-
-def add_status(table, status = 0)
-  table[:status] = status
-
-  return table
 end
 
 def id_to_file(id, verify = false)
@@ -81,6 +84,13 @@ def id_to_data(id, params)
   offset = params['offset'] ? params['offset'].to_i : nil
 
   return IO.read(id_to_file(id, true), size, offset)
+end
+
+def file_to_data(file, params)
+  size   = params['size']   ? params['size'].to_i   : nil
+  offset = params['offset'] ? params['offset'].to_i : nil
+
+  return IO.read(file, size, offset)
 end
 
 def parse(filename, options = {})
@@ -108,6 +118,35 @@ def parse(filename, options = {})
   end
 end
 
+def handle_file_request(request, file, id, params)
+  case request
+  when 'download'
+    headers({ 'Content-Disposition' => 'Attachment' })
+
+    data = file_to_data(file, params)
+
+    return {
+      :status => 0,
+      :file => Base64.encode64(data)
+    }
+  when 'disassemble'
+    data = file_to_data(file, params)
+    return {:instructions => disassemble_x86(data, 32)}
+  when 'symbols'
+    parsed = parse(file, :format => params['format'], :id => id)
+    return {:symbols => parsed[:symbols]}
+  when 'imports'
+    parsed = parse(file, :format => params['format'], :id => id)
+    return {:imports => parsed[:imports]}
+  when 'exports'
+    parsed = parse(file, :format => params['format'], :id => id)
+    return {:exports => parsed[:exports]}
+  when 'parse'
+    return parse(file, :format => params['format'], :id => id)
+  else
+    raise(Exception, "Unknown request")
+  end
+end
 # Add important headers and encode everything as JSON
 after do
   if(response.content_type.nil?)
@@ -117,6 +156,12 @@ after do
   headers({ 'X-Frame-Options' => 'DENY' })
 
   if(response.content_type =~ /json/)
+    # Default to a good status
+    if(response.body[:status].nil?)
+      response.body[:status] = 0
+    end
+
+    # Convert the response to json
     response.body = JSON.pretty_generate(response.body) + "\n"
   end
 end
@@ -142,7 +187,7 @@ not_found do
 end
 
 get '/' do
-  return 'Welcome to h2gb! '
+  return "Welcome to h2gb! If you don't know why you're seeing this, you probably don't need to be here :)"
 end
 
 post '/upload' do
@@ -160,71 +205,6 @@ post '/upload' do
   end
 end
 
-get(/^\/download\/(#{UUID})$/) do |id|
-
-  headers({ 'Content-Disposition' => 'Attachment' })
-
-  data = id_to_data(id, params)
-
-  return {
-    :status => 0,
-    :file => Base64.encode64(data)
-  }
-end
-
-get(/^\/parse\/(#{UUID})$/) do |id|
-  file = id_to_file(id, true)
-  parsed = parse(file, :format => params['format'], :id => id)
-  return add_status(parsed, 0)
-end
-
-post('/parse') do
-  get_temp_file do |filename|
-    parsed = parse(filename, :format => params['format'])
-    return add_status(parsed, 0)
-  end
-end
-
-post '/disasm/x86/' do
-  get_file_data(params) do |data|
-    result = {
-      :instructions => disassemble_x86(data, 32)
-    }
-
-    return add_status(result, 0)
-  end
-end
-
-get(/^\/disasm\/x86\/(#{UUID})/) do |id|
-  data = id_to_data(id, params)
-
-  result = {
-    :instructions => disassemble_x86(data, 32)
-  }
-
-  return add_status(result, 0)
-end
-
-post '/disasm/x64/' do
-  get_file_data(params) do |data|
-    result = {
-      :instructions => disassemble_x86(data, 64)
-    }
-    return add_status(result, 0)
-  end
-end
-
-get(/^\/disasm\/x64\/(#{UUID})/) do |id|
-  data = id_to_data(id, params)
-
-  result = {
-    :instructions => disassemble_x86(data, 64)
-  }
-
-
-  return add_status(result, 0)
-end
-
 get('/list') do
   list = []
   Dir.entries(UPLOADS).each() do |e|
@@ -233,6 +213,19 @@ get('/list') do
     end
   end
   return list
+end
+
+
+# Handle most file-oriented requests with an id built in
+get(/^\/([a-z]+)\/(#{UUID})$/) do |request, id|
+  return handle_file_request(request, id_to_file(id), id, params)
+end
+
+# Handle most file-oriented requests that work on a temp file
+post(/^\/([a-z]+)\/upload$/) do |request|
+  get_temp_file(params) do |file|
+    return handle_file_request(request, file, nil, params)
+  end
 end
 
 post '/upload_html' do
