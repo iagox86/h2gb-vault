@@ -14,12 +14,14 @@
         var div = $("<div>Loading header...</div>")
 
         $.getJSON("/header/" + id, {}, function(data) {
+          console.log(data);
           table = $('<table></table>');
           table.append($("<tr><td>Name</td><td>Value</td></tr>"));
 
+          table.append($("<tr><td>Type</td><td>" + data['header']['format'] + "</td></tr>"));
           if(typeof data['header']['base'] != "undefined")
             table.append($("<td>Base address</td><td>0x" + data['header']['base'].toString(16) + "</td></tr>"));
-          table.append("<tr><td>Entrypoint</td><td>0x" + data['header']['entrypoint'].toString(16) + "</td></tr>");
+          table.append($("<tr><td>Entrypoint</td><td>0x" + data['header']['entrypoint'].toString(16) + "</td></tr>"));
 
           div.html(table)
         })
@@ -146,6 +148,7 @@
             clean_name = name.replace(/[^a-zA-Z0-9_]/g, '_');
 
             div.append($("<h2>" + name + " (0x" + s['file_size'].toString(16) + " bytes)</h2>"));
+            console.log(s);
             div.append(create_loadable(clean_name, load_code, [name, s['data_ref']]));
           }
         })
@@ -188,8 +191,6 @@
         var out = $('#top_container');
 
         out.html("<p><a href='#' onClick='show_list()'>Show files</a></p>");
-
-        out.append('Working...');
 
         out.append("<h1>Header</h1>");
         out.append(create_loadable('header', load_header, [id]))

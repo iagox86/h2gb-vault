@@ -12,6 +12,7 @@ require 'pp' # debug
 
 require 'elf'
 require 'pe'
+require 'raw'
 
 require 'x86'
 
@@ -104,7 +105,7 @@ def parse(filename, options = {})
     elsif(header == "MZ\x90\x00")
       return parse_pe(filename, id)
     else
-      raise(Exception, "Couldn't auto-determine format for #{filename}")
+      return parse_raw(filename, id)
     end
   else
     format = params['format']
@@ -113,7 +114,7 @@ def parse(filename, options = {})
     elsif(format.downcase() == 'pe')
       return parse_pe(filename, id)
     else
-      raise(Exception, "Unknown format")
+      return parse_raw(filename, id)
     end
   end
 end
@@ -147,12 +148,6 @@ def handle_file_request(request, file, id, params)
   when 'sections'
     parsed = parse(file, :format => params['format'], :id => id)
     return {:sections => parsed[:sections]}
-
-
-  # XXX: I don't really wanna keep this one
-#  when 'parse'
-#    parsed = parse(file, :format => params['format'], :id => id)
-#    return parsed
 
   else
     raise(Exception, "Unknown request")

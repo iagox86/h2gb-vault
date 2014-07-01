@@ -2,14 +2,13 @@ require 'base64'
 require 'metasm'
 
 def parse_pe(filename, id)
-  pe = {
-    :format => "PE"
-  }
+  pe = { }
 
   e = Metasm::PE.decode_file(filename)
 
   # Header
   pe[:header] = {
+    :format       => "PE",
     :base         => e.optheader.image_base,
     :sect_align   => e.optheader.sect_align,
     :code_size    => e.optheader.code_size,
