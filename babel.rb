@@ -144,11 +144,15 @@ def handle_file_request(request, file, id, params)
   when 'disassemble'
     data = file_to_data(file, params)
     return {:instructions => disassemble_x86(data, 32)}
+  when 'sections'
+    parsed = parse(file, :format => params['format'], :id => id)
+    return {:sections => parsed[:sections]}
+
 
   # XXX: I don't really wanna keep this one
-  when 'parse'
-    parsed = parse(file, :format => params['format'], :id => id)
-    return parsed
+#  when 'parse'
+#    parsed = parse(file, :format => params['format'], :id => id)
+#    return parsed
 
   else
     raise(Exception, "Unknown request")

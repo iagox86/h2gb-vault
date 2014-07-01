@@ -108,40 +108,60 @@
         return div;
       }
 
-      function try_disassemble(name, data_ref)
+      function load_code(name, data_ref)
       {
-        e = $('#code_' + name);
-        e.html("Working...");
+        var div = $('<div>Loading ' + name + '...</div>');
 
         $.getJSON("/disassemble/" + data_ref, {}, function(data) {
-          e.html('');
-          e.append("<table>");
+          table = $("<table></table>");
           for(i in data['instructions'])
           {
             i = data['instructions'][i];
 
-            e.append("<tr>");
-            e.append("<td>0x" + i['address'].toString(16) + "</td>");
-            e.append("<td>" + to_hex_string(atob(i['bytes'])) + "</td>");
-            e.append("<td>" + i['name'] + "</td>");
-            e.append("<td>" + i['args'].join(', ') + "</td>");
-          }
-          e.append("</table>");
+            tr = $('<tr>');
+            tr.append($("<td>0x" + i['address'].toString(16) + "</td>"));
+            tr.append($("<td>" + to_hex_string(atob(i['bytes'])) + "</td>"));
+            tr.append($("<td>" + i['name'] + "</td>"));
+            tr.append($("<td>" + i['args'].join(', ') + "</td>"));
 
-          e.append("<input type='button' onClick=\"$('#json_" + name + "').toggle()\" value='Toggle raw'>");
-          e.append("<pre id='json_" + name + "' style='display: none;'>" + JSON.stringify(data, null, 4) + "</pre>");
+            table.append(tr);
+          }
+          div.html(table);
         })
+
+        return div;
+      }
+
+      function load_sections(id)
+      {
+        var div = $("<div>Loading sections...</div>");
+
+        $.getJSON("/sections/" + id, {}, function(data) {
+          div.html('');
+
+          for(s in data['sections'])
+          {
+            s = data['sections'][s];
+            name = s['name'];
+            clean_name = name.replace(/[^a-zA-Z0-9_]/g, '_');
+
+            div.append($("<h2>" + name + " (0x" + s['file_size'].toString(16) + " bytes)</h2>"));
+            div.append(create_loadable(clean_name, load_code, [name, s['data_ref']]));
+          }
+        })
+
+        return div;
       }
 
       function create_loadable(name, load_function, params)
       {
         var out         = $("<div></div>");
-        var placeholder = $("<div id='" + name + "_placeholder'>Click to load</div>");
+        var placeholder = $("<input type='button' value='Load' id='" + name + "_placeholder' />");
         var main        = $("<div id='" + name + "' style='display: none;'></div>");
         placeholder.click(function() {
           $(this).hide();
 
-          hide = $("<input type='button' value='hide'>")
+          hide = $("<input type='button' value='Hide'>")
           hide.click(function() {
             $('#' + name + '_placeholder').show();
             $('#' + name).hide();
@@ -158,6 +178,7 @@
 
         return out;
       }
+
 
       function load(id)
       {
@@ -182,24 +203,8 @@
         out.append($('<h1>Exports</h1>'));
         out.append(create_loadable('exports', load_exports, [id]));
 
-        /* TODO: This is going away. */
-        $.getJSON("/parse/" + id, {}, function(data) {
-          for(section in data['sections'])
-          {
-            section = data['sections'][section];
-            name = section['name'];
-            name = name.replace(/[^a-zA-Z0-9_]/g, '_');
-
-            out.append("<p>Section " + section['name'] + "</p>");
-            out.append("<div id='code_" + name + "'><input type='button' value='Try to disassemble' onClick='try_disassemble(\"" + name + "\", \"" + section['data_ref'] + "\")'></p>");
-            out.append("<hr>");
-
-          }
-
-          out.append("<hr>");
-          out.append("<input type='button' onClick=\"$('#json').toggle()\" value='Toggle'>");
-          $('#top_container').append("<div id='json'><pre>" + JSON.stringify(data, null, 4) + "</pre></div>");
-        });
+        out.append($('<h1>Sections</h1>'));
+        out.append(create_loadable('sections', load_sections, [id]));
       }
 
       function show_list()
