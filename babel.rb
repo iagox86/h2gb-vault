@@ -1,8 +1,9 @@
 $LOAD_PATH << File.dirname(__FILE__)
 
 require 'sinatra'
-
 require 'sinatra/activerecord'
+
+require 'models'
 
 require 'fileutils'
 require 'json'
@@ -31,9 +32,6 @@ set :show_exceptions, false
 set :bind, "0.0.0.0"
 set :port, 4567
 
-class Binary < ActiveRecord::Base
-end
-
 UPLOADS = File.dirname(__FILE__) + "/uploads/"
 FileUtils.mkdir_p(UPLOADS)
 
@@ -54,9 +52,9 @@ class Babel < Sinatra::Base
 
   def get_file_data(params)
     if(params['file'].is_a?(Hash))
-      yield(params['file'][:tempfile].read())
+      yield(params['file']['filename'], params['file'][:tempfile].read(), nil, params['comment'])
     else
-      yield(params['file'])
+      yield(params['file'], params['filename'], nil, params['comment'])
     end
   end
 
@@ -162,27 +160,36 @@ class Babel < Sinatra::Base
     return "Welcome to h2gb!"
   end
 
+  def binary_upload(filename, data, parent_id, comment)
+    # Generate an id for it
+    id = SecureRandom.uuid
+
+    # Write to a file named after that id
+    new_filename = id_to_file(id)
+    File.open(new_filename, "wb") do |f|
+      f.write(data)
+      f.close()
+    end
+
+    # Create an entry in the database
+    b = Binary.new(:name => filename, :filename => new_filename, :parent_id => parent_id, :comment => comment)
+    b.save()
+
+    return b.id()
+  end
+
   post '/upload_html' do
     content_type 'text/html'
 
-    get_file_data(params) do |data|
-      id = SecureRandom.uuid
-      File.open(id_to_file(id), "wb") do |f|
-        f.write(data)
-        f.close()
-      end
-
-      redirect to('/static/test.html#' + id)
+    get_file_data(params) do |filename, data, parent_id, comment|
+      id = binary_upload(filename, data, parent_id, comment)
+      redirect to('/static/test.html#' + id.to_s())
     end
   end
 
   post '/upload' do
-    get_file_data(params) do |data|
-      id = SecureRandom.uuid
-      File.open(id_to_file(id), "wb") do |f|
-        f.write(data)
-        f.close()
-      end
+    get_file_data(params) do |filename, data, parent_id, comment|
+      id = binary_upload(filename, data, parent_id, comment)
 
       return {
         :status => 0,
@@ -190,6 +197,7 @@ class Babel < Sinatra::Base
       }
     end
   end
+
   get '/upload' do
     return try_post()
   end
@@ -222,16 +230,6 @@ class Babel < Sinatra::Base
     end
   end
 
-  post '/disasm/x86/' do
-    get_file_data(params) do |data|
-      result = {
-        :instructions => disassemble_x86(data, 32)
-      }
-
-      return add_status(result, 0)
-    end
-  end
-
   get(/^\/disasm\/x86\/([a-fA-F0-9-]+)/) do |id|
     data = id_to_data(id, params)
 
@@ -240,15 +238,6 @@ class Babel < Sinatra::Base
     }
 
     return add_status(result, 0)
-  end
-
-  post '/disasm/x64/' do
-    get_file_data(params) do |data|
-      result = {
-        :instructions => disassemble_x86(data, 64)
-      }
-      return add_status(result, 0)
-    end
   end
 
   get(/^\/disasm\/x64\/([a-fA-F0-9-]+)/) do |id|

@@ -3,7 +3,7 @@ require 'httmultiparty'
 require 'httparty'
 
 HOST = 'localhost'
-PORT = 4567
+PORT = 9292
 
 SERVICE = "http://%s:%s" % [HOST, PORT]
 

@@ -149,7 +149,9 @@
     <div id="list_container" style="display: none;">
       <p>You can upload files here; you should get the id back as JSON, which will then appear in the list (yeah, that's ugly, but that's what you get for now :) )</p>
       <form action='/upload_html' method='post' enctype='multipart/form-data'>
-        <input type='file' name='file' />
+        <p><input type='file' name='file' /></p>
+        <p>Comment <textarea name='comment'></textarea></p>
+        
         <input type='submit' name='upload' />
       </form>
       <ul id="list"></ul>

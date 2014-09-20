@@ -11,11 +11,15 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20140920201007) do
+ActiveRecord::Schema.define(version: 20140920215248) do
 
   create_table "binaries", force: true do |t|
-    t.string "name"
-    t.text   "description"
+    t.string   "name"
+    t.string   "filename"
+    t.integer  "parent_id"
+    t.text     "comment"
+    t.datetime "created_at"
+    t.datetime "updated_at"
   end
 
 end
