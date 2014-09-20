@@ -2,14 +2,13 @@ require 'base64'
 require 'metasm'
 
 def parse_elf(filename, id)
-  elf = {
-    :format => "ELF"
-  }
+  elf = { }
 
   e = Metasm::ELF.decode_file(filename)
 
   # Header
   elf[:header] = {
+    :format     => "ELF",
     :entrypoint => e.header.entry,
   }
 
