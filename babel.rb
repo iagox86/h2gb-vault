@@ -51,11 +51,6 @@ class Babel < Sinatra::Base
   end
 
   def get_file_data(params)
-    if(params['file'].is_a?(Hash))
-      yield(params['file']['filename'], params['file'][:tempfile].read(), nil, params['comment'])
-    else
-      yield(params['file'], params['filename'], nil, params['comment'])
-    end
   end
 
   def try_get()
@@ -160,12 +155,25 @@ class Babel < Sinatra::Base
     return "Welcome to h2gb!"
   end
 
-  def binary_upload(filename, data, parent_id, comment)
+  def save_file(params)
+    if(params['file'].is_a?(Hash))
+      pp params
+      filename = params['file'][:filename]
+      puts("Filename: #{filename}")
+      data = params['file'][:tempfile].read()
+    else
+      filename = params['filename']
+      data = params['file']
+    end
+
+    comment = params['comment']
+    parent_id = nil
+
     # Generate an id for it
     id = SecureRandom.uuid
-
-    # Write to a file named after that id
     new_filename = id_to_file(id)
+
+    # Write the file
     File.open(new_filename, "wb") do |f|
       f.write(data)
       f.close()
@@ -175,27 +183,23 @@ class Babel < Sinatra::Base
     b = Binary.new(:name => filename, :filename => new_filename, :parent_id => parent_id, :comment => comment)
     b.save()
 
-    return b.id()
+    return id
   end
 
   post '/upload_html' do
     content_type 'text/html'
 
-    get_file_data(params) do |filename, data, parent_id, comment|
-      id = binary_upload(filename, data, parent_id, comment)
-      redirect to('/static/test.html#' + id.to_s())
-    end
+    id = save_file(params)
+    redirect to('/static/test.html')
   end
 
   post '/upload' do
-    get_file_data(params) do |filename, data, parent_id, comment|
-      id = binary_upload(filename, data, parent_id, comment)
+    id = save_file(params)
 
-      return {
-        :status => 0,
-        :id => id,
-      }
-    end
+    return {
+      :status => 0,
+      :id => id,
+    }
   end
 
   get '/upload' do
@@ -247,8 +251,11 @@ class Babel < Sinatra::Base
       :instructions => disassemble_x86(data, 64)
     }
 
-
     return add_status(result, 0)
+  end
+
+  get('/binaries') do
+    return Binary.all().as_json()
   end
 
   get('/list') do
