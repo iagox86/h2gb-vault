@@ -181,6 +181,7 @@ class Babel < Sinatra::Base
 
     # Create an entry in the database
     b = Binary.new(:name => filename, :filename => new_filename, :parent_id => parent_id, :comment => comment)
+    b.id = id
     b.save()
 
     return id
@@ -190,7 +191,8 @@ class Babel < Sinatra::Base
     content_type 'text/html'
 
     id = save_file(params)
-    redirect to('/static/test.html')
+
+    redirect to('/static/test.html#' + id)
   end
 
   post '/upload' do
@@ -222,15 +224,13 @@ class Babel < Sinatra::Base
   end
 
   get(/^\/parse\/([a-fA-F0-9-]+)$/) do |id|
-    file = id_to_file(id, true)
-    parsed = parse(file, :format => params['format'], :id => id)
-    return add_status(parsed, 0)
-  end
+    b = Binary.find(id)
 
-  post('/parse') do
-    get_temp_file do |filename|
-      parsed = parse(filename, :format => params['format'])
+    begin
+      parsed = parse(b.filename, :format => params['format'], :id => id)
       return add_status(parsed, 0)
+    rescue Exception => e
+      return { :status => 1, :error => e.to_s }
     end
   end
 

@@ -13,7 +13,8 @@
 
 ActiveRecord::Schema.define(version: 20140920215248) do
 
-  create_table "binaries", force: true do |t|
+  create_table "binaries", id: false, force: true do |t|
+    t.string   "id",         limit: 36, null: false
     t.string   "name"
     t.string   "filename"
     t.integer  "parent_id"
