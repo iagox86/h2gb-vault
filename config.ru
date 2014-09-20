@@ -1,2 +1,3 @@
 require './babel'
-run Sinatra::Application
+
+run Babel.new()
