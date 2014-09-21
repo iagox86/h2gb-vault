@@ -79,20 +79,14 @@ class Babel < Sinatra::Base
   error do
     status 200
 
-    return {
-      :status => 400,
-      :msg => env['sinatra.error']
-    }
+    return add_status( {:reason => env['sinatra.error'] }, 500)
   end
 
   # Handle file-not-found errors
   not_found do
     status 404
 
-    return {
-      :status => 404,
-      :msg => "Not found"
-    }
+    return add_status( {:reason => 'not found' }, 404)
   end
 
   get '/' do
@@ -121,19 +115,15 @@ class Babel < Sinatra::Base
     )
     b.save()
 
-    return {
-      :status => 0,
-      :id => b.id,
-    }
+    return add_status( {:id => b.id }, 0)
   end
 
   get(COMMAND('download')) do |id|
     b = Binary.find(id)
-    return {
-      :status => 0,
+    return add_status( {
       :name => b.filename,
       :file => Base64.encode64(b.data),
-    }
+    }, 0)
   end
 
   # XXX: Get rid of this once I replace it
@@ -144,13 +134,19 @@ class Babel < Sinatra::Base
       parsed = parse(b.filename, :format => params['format'], :id => id)
       return add_status(parsed, 0)
     rescue Exception => e
-      return { :status => 1, :error => e.to_s }
+      return add_status({:error => e.to_s}, 500)
     end
   end
 
   get(COMMAND('details')) do |id|
+    # TODO
     b = Binary.find(id)
     return add_status(0, b.details())
+  end
+
+  get(COMMAND('format')) do |id|
+    b = Binary.find(id)
+    return add_status({ format: b.format() }, 0)
   end
 
   get(/^\/disasm\/x86\/([a-fA-F0-9-]+)/) do |id|
