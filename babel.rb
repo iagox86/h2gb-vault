@@ -95,41 +95,31 @@ class Babel < Sinatra::Base
     return "Welcome to h2gb!"
   end
 
-  def save_file(params)
-    if(params['file'].is_a?(Hash))
-      pp params
-      filename = params['file'][:filename]
-      puts("Filename: #{filename}")
-      data = params['file'][:tempfile].read()
-    else
-      filename = params['filename']
-      data = params['file']
-    end
-
-    comment = params['comment']
-    parent_id = nil
-
-    # Create an entry in the database
-    b = Binary.new(:name => filename, :parent_id => parent_id, :comment => comment, :data => data)
-    b.save()
-
-    return b.id
-  end
-
   post '/upload_html' do
     content_type 'text/html'
 
-    id = save_file(params)
+    b = Binary.new(
+      :name => params['file'][:filename],
+      :comment => params['comment'],
+      :data => params['file'][:tempfile].read()
+    )
+    b.save()
 
-    redirect to('/static/test.html#' + id)
+
+    redirect to('/static/test.html#' + b.id)
   end
 
   post '/upload' do
-    id = save_file(params)
+    b = Binary.new(
+      :name    => params['filename'],
+      :comment => params['comment'],
+      :data    => params['data'],
+    )
+    b.save()
 
     return {
       :status => 0,
-      :id => id,
+      :id => b.id,
     }
   end
 
