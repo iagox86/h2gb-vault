@@ -27,70 +27,10 @@ ActiveRecord::Base.establish_connection(
   :encoding => 'utf8',
 )
 
-# Sinatra stuff
-set :show_exceptions, false
-set :bind, "0.0.0.0"
-set :port, 4567
-
-UPLOADS = File.dirname(__FILE__) + "/uploads/"
-FileUtils.mkdir_p(UPLOADS)
-
 class Babel < Sinatra::Base
-  def get_temp_file(params)
-    if(params['file'].is_a?(Hash))
-      yield params['tempfile']
-    else
-      file = Tempfile.new('h2gb-babel')
-      file.write(params['file'])
-      file.close()
-
-      yield file.path
-
-      file.unlink()
-    end
-  end
-
-  def get_file_data(params)
-  end
-
-  def try_get()
-    return {
-      :status => 404,
-      :msg    => "Try using GET!"
-    }
-  end
-
-  def try_post()
-    return {
-      :status => 404,
-      :msg    => "Try using POST!"
-    }
-  end
-
   def add_status(table, status = 0)
     table[:status] = status
-
     return table
-  end
-
-  def id_to_file(id, verify = false)
-    if(id !~ /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
-      raise(Exception, "Bad UUID")
-    end
-
-    file = UPLOADS + id
-    if(verify && !File.exists?(file))
-      raise(Exception, "File not found")
-    end
-
-    return UPLOADS + id
-  end
-
-  def id_to_data(id, params)
-    size   = params['size']   ? params['size'].to_i   : nil
-    offset = params['offset'] ? params['offset'].to_i : nil
-
-    return IO.read(id_to_file(id, true), size, offset)
   end
 
   def parse(filename, options = {})
@@ -127,6 +67,7 @@ class Babel < Sinatra::Base
     headers({ 'X-Frame-Options' => 'DENY' })
 
     if(response.content_type =~ /json/)
+      headers({ 'Content-Disposition' => 'Attachment' })
       response.body = JSON.pretty_generate(response.body) + "\n"
     end
   end
@@ -171,7 +112,6 @@ class Babel < Sinatra::Base
 
     # Generate an id for it
     id = SecureRandom.uuid
-    new_filename = id_to_file(id)
 
     # Write the file
     File.open(new_filename, "wb") do |f|
@@ -180,7 +120,7 @@ class Babel < Sinatra::Base
     end
 
     # Create an entry in the database
-    b = Binary.new(:name => filename, :filename => new_filename, :parent_id => parent_id, :comment => comment)
+    b = Binary.new(:name => filename, :parent_id => parent_id, :comment => comment)
     b.id = id
     b.save()
 
@@ -204,23 +144,14 @@ class Babel < Sinatra::Base
     }
   end
 
-  get '/upload' do
-    return try_post()
-  end
-
   get(/^\/download\/([a-fA-F0-9-]+)$/) do |id|
 
-    headers({ 'Content-Disposition' => 'Attachment' })
-
-    data = id_to_data(id, params)
-
+    b = Binary.find(id)
     return {
       :status => 0,
-      :file => Base64.encode64(data)
+      :name => b.filename,
+      :file => Base64.encode64(b.data),
     }
-  end
-  post(/\/download/) do
-    return try_get()
   end
 
   get(/^\/parse\/([a-fA-F0-9-]+)$/) do |id|
@@ -235,20 +166,20 @@ class Babel < Sinatra::Base
   end
 
   get(/^\/disasm\/x86\/([a-fA-F0-9-]+)/) do |id|
-    data = id_to_data(id, params)
+    b = Binary.find(id)
 
     result = {
-      :instructions => disassemble_x86(data, 32)
+      :instructions => disassemble_x86(b.data, 32)
     }
 
     return add_status(result, 0)
   end
 
   get(/^\/disasm\/x64\/([a-fA-F0-9-]+)/) do |id|
-    data = id_to_data(id, params)
+    b = Binary.find(id)
 
     result = {
-      :instructions => disassemble_x86(data, 64)
+      :instructions => disassemble_x86(b.data, 64)
     }
 
     return add_status(result, 0)
@@ -256,16 +187,6 @@ class Babel < Sinatra::Base
 
   get('/binaries') do
     return Binary.all().as_json()
-  end
-
-  get('/list') do
-    list = []
-    Dir.entries(UPLOADS).each() do |e|
-      if(e =~ /[a-fA-F0-9-]+/)
-        list << e
-      end
-    end
-    return list
   end
 
   get(/\/static\/([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/) do |file|
