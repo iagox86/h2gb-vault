@@ -3,11 +3,10 @@ $LOAD_PATH << File.dirname(__FILE__)
 require 'sinatra'
 require 'sinatra/activerecord'
 
-require 'models'
+require 'binary'
 
 require 'fileutils'
 require 'json'
-require 'securerandom'
 require 'tempfile'
 
 require 'pp' # debug
@@ -110,21 +109,11 @@ class Babel < Sinatra::Base
     comment = params['comment']
     parent_id = nil
 
-    # Generate an id for it
-    id = SecureRandom.uuid
-
-    # Write the file
-    File.open(new_filename, "wb") do |f|
-      f.write(data)
-      f.close()
-    end
-
     # Create an entry in the database
-    b = Binary.new(:name => filename, :parent_id => parent_id, :comment => comment)
-    b.id = id
+    b = Binary.new(:name => filename, :parent_id => parent_id, :comment => comment, :data => data)
     b.save()
 
-    return id
+    return b.id
   end
 
   post '/upload_html' do
