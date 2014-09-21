@@ -57,6 +57,10 @@ class Babel < Sinatra::Base
     end
   end
 
+  def Babel.COMMAND(c)
+    return /^\/#{c}\/([a-fA-F0-9-]+)$/
+  end
+
   # Add important headers and encode everything as JSON
   after do
     if(response.content_type.nil?)
@@ -123,8 +127,7 @@ class Babel < Sinatra::Base
     }
   end
 
-  get(/^\/download\/([a-fA-F0-9-]+)$/) do |id|
-
+  get(COMMAND('download')) do |id|
     b = Binary.find(id)
     return {
       :status => 0,
@@ -133,7 +136,8 @@ class Babel < Sinatra::Base
     }
   end
 
-  get(/^\/parse\/([a-fA-F0-9-]+)$/) do |id|
+  # XXX: Get rid of this once I replace it
+  get(COMMAND('parse')) do |id|
     b = Binary.find(id)
 
     begin
@@ -142,6 +146,11 @@ class Babel < Sinatra::Base
     rescue Exception => e
       return { :status => 1, :error => e.to_s }
     end
+  end
+
+  get(COMMAND('details')) do |id|
+    b = Binary.find(id)
+    return add_status(0, b.details())
   end
 
   get(/^\/disasm\/x86\/([a-fA-F0-9-]+)/) do |id|
@@ -165,7 +174,7 @@ class Babel < Sinatra::Base
   end
 
   get('/binaries') do
-    return Binary.all().as_json()
+    return add_status(Binary.all().as_json(), 0)
   end
 
   get(/\/static\/([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/) do |file|

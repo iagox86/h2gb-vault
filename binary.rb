@@ -41,5 +41,17 @@ class Binary < ActiveRecord::Base
   def data(offset = nil, size = nil, basepath = Binary::UPLOAD_PATH)
     return IO.read(self.filename(), size, offset)
   end
+
+  def format()
+    header = IO.read(filename, 4, 0)
+
+    if(header == "\x7FELF")
+      return "ELF"
+    elsif(header == "MZ\x90\x00")
+      return "PE"
+    else
+      return "unknown"
+    end
+  end
 end
 
