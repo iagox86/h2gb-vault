@@ -11,8 +11,6 @@ require 'tempfile'
 
 require 'pp' # debug
 
-require 'x86'
-
 # Database stuff
 ActiveRecord::Base.establish_connection(
   :adapter => 'sqlite3',
@@ -113,9 +111,20 @@ class Babel < Sinatra::Base
     return add_status(0, { format: b.format() })
   end
 
-  get(/^\/disasm\/x86\/([a-fA-F0-9-]+)/) do |id|
+  get(COMMAND('disassemble')) do |id|
     b = Binary.find(id)
 
+    offset = params['offset']
+    length = params['size']
+    arch = params['arch']
+
+    return add_status(0, {
+      :instructions => b.disassemble(offset, length, arch)
+    })
+  end
+
+  get(/^\/disasm\/x86\/([a-fA-F0-9-]+)/) do |id|
+    b = Binary.find(id)
 
     return add_status(0, {
       :instructions => disassemble_x86(b.data, 32)

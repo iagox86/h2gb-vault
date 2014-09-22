@@ -9,6 +9,9 @@ require 'formats/elf'
 require 'formats/pe'
 require 'formats/raw'
 
+require 'arch/x86'
+require 'arch/x64'
+
 class Binary < ActiveRecord::Base
   # Because I'm using UUIDs for the primary key, this needs to be defined
   self.primary_key = :id
@@ -18,6 +21,9 @@ class Binary < ActiveRecord::Base
   include ELF
   include PE
   include Raw
+
+  include X86
+  include X64
 
   def initialize(params)
     # Keep track of the 'data' field separately
@@ -43,11 +49,11 @@ class Binary < ActiveRecord::Base
     end
   end
 
-  def filename(basepath = UPLOAD_PATH)
-    return basepath + '/' + self.id
+  def filename()
+    return Binary::UPLOAD_PATH + '/' + self.id
   end
 
-  def data(offset = nil, size = nil, basepath = Binary::UPLOAD_PATH)
+  def data(offset = nil, size = nil)
     return IO.read(self.filename(), size, offset)
   end
 
@@ -72,6 +78,16 @@ class Binary < ActiveRecord::Base
       return parse_pe()
     elsif(fmt == "raw")
       return parse_raw()
+    else
+      raise NotImplementedError
+    end
+  end
+
+  def disassemble(offset, length, arch)
+    if(arch == 'x86')
+      return disassemble_x86(self.data(offset, length))
+    elsif(arch == 'x64')
+      return disassemble_x64(self.data(offset, length))
     else
       raise NotImplementedError
     end
