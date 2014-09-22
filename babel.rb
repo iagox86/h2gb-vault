@@ -24,7 +24,7 @@ ActiveRecord::Base.establish_connection(
 )
 
 class Babel < Sinatra::Base
-  def add_status(table, status = 0)
+  def add_status(status, table)
     table[:status] = status
     return table
   end
@@ -51,14 +51,14 @@ class Babel < Sinatra::Base
   error do
     status 200
 
-    return add_status( {:reason => env['sinatra.error'] }, 500)
+    return add_status(500,  {:reason => env['sinatra.error'] })
   end
 
   # Handle file-not-found errors
   not_found do
     status 404
 
-    return add_status( {:reason => 'not found' }, 404)
+    return add_status(404, {:reason => 'not found' })
   end
 
   get '/' do
@@ -87,50 +87,47 @@ class Babel < Sinatra::Base
     )
     b.save()
 
-    return add_status( {:id => b.id }, 0)
+    return add_status(0, {:id => b.id })
   end
 
   get('/binaries') do
-    return add_status(Binary.all().as_json(), 0)
+    return add_status(0, {:binaries => Binary.all().as_json() })
   end
 
   get(COMMAND('download')) do |id|
     b = Binary.find(id)
-    return add_status( {
+    return add_status(0, {
       :name => b.filename,
       :file => Base64.encode64(b.data),
-    }, 0)
+    })
   end
 
   get(COMMAND('parse')) do |id|
     b = Binary.find(id)
 
-    return add_status(b.parse(:format => params['format']), 0)
+    return add_status(0, b.parse(:format => params['format']))
   end
 
   get(COMMAND('format')) do |id|
     b = Binary.find(id)
-    return add_status({ format: b.format() }, 0)
+    return add_status(0, { format: b.format() })
   end
 
   get(/^\/disasm\/x86\/([a-fA-F0-9-]+)/) do |id|
     b = Binary.find(id)
 
-    result = {
-      :instructions => disassemble_x86(b.data, 32)
-    }
 
-    return add_status(result, 0)
+    return add_status(0, {
+      :instructions => disassemble_x86(b.data, 32)
+    })
   end
 
   get(/^\/disasm\/x64\/([a-fA-F0-9-]+)/) do |id|
     b = Binary.find(id)
 
-    result = {
+    return add_status(0, {
       :instructions => disassemble_x86(b.data, 64)
-    }
-
-    return add_status(result, 0)
+    })
   end
 
   get(/\/static\/([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/) do |file|

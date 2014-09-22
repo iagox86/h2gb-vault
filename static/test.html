@@ -124,6 +124,8 @@
         $('#list_container').show();
         $('#top_container').hide();
         $.getJSON("/binaries", {}, function(data) {
+          data = data['binaries'];
+
           for(key in data) {
             value = data[key];
             console.log(value);
