@@ -1,14 +1,23 @@
+$LOAD_PATH << File.dirname(__FILE__)
+
 require 'sinatra'
 require 'sinatra/activerecord'
 
 require 'securerandom'
 
+require 'formats/elf'
+require 'formats/pe'
+require 'formats/raw'
 
 class Binary < ActiveRecord::Base
   # Because I'm using UUIDs for the primary key, this needs to be defined
   self.primary_key = :id
 
   UPLOAD_PATH = File.dirname(__FILE__) + "/uploads"
+
+  include ELF
+  include PE
+  include Raw
 
   def initialize(params)
     # Keep track of the 'data' field separately
@@ -50,8 +59,21 @@ class Binary < ActiveRecord::Base
     elsif(header == "MZ\x90\x00")
       return "PE"
     else
-      return "unknown"
+      return "raw"
+    end
+  end
+
+  def parse(options)
+    fmt = options[:format] || format()
+
+    if(fmt == "ELF")
+      return parse_elf()
+    elsif(fmt == "PE")
+      return parse_pe()
+    elsif(fmt == "raw")
+      return parse_raw()
+    else
+      raise NotImplementedError
     end
   end
 end
-
