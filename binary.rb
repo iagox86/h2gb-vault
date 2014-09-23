@@ -22,9 +22,6 @@ class Binary < ActiveRecord::Base
   include PE
   include Raw
 
-  include X86
-  include X64
-
   def initialize(params)
     # Keep track of the 'data' field separately
     @data = params.delete(:data)
@@ -84,12 +81,16 @@ class Binary < ActiveRecord::Base
   end
 
   def disassemble(offset, length, arch)
+    disassembler = nil
+    data = self.data(offset, length)
     if(arch == 'x86')
-      return disassemble_x86(self.data(offset, length))
+      disassembler = X86.new(data)
     elsif(arch == 'x64')
-      return disassemble_x64(self.data(offset, length))
+      disassembler = X64.new(data)
     else
       raise NotImplementedError
     end
+
+    return disassembler.instructions
   end
 end
