@@ -2,8 +2,8 @@ require 'base64'
 require 'metasm'
 
 module Raw
-  def parse_raw(filename, id)
-    size = File.size(b.filename)
+  def parse_raw()
+    size = File.size(self.filename)
 
     out = { }
 
