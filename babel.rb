@@ -21,7 +21,7 @@ ActiveRecord::Base.establish_connection(
   :encoding => 'utf8',
 )
 
-class Babel < Sinatra::Base
+class Babel < Sinatra::Application
   def add_status(status, table)
     table[:status] = status
     return table
@@ -40,7 +40,11 @@ class Babel < Sinatra::Base
     headers({ 'X-Frame-Options' => 'DENY' })
 
     if(response.content_type =~ /json/)
-      headers({ 'Content-Disposition' => 'Attachment' })
+      headers({
+#        'Access-Control-Allow-Origin' => '*', # TODO: Might not need this forever
+        'Content-Disposition' => 'Attachment'
+      })
+
       response.body = JSON.pretty_generate(response.body) + "\n"
     end
   end
@@ -115,27 +119,18 @@ class Babel < Sinatra::Base
     b = Binary.find(id)
 
     offset = params['offset']
-    length = params['size']
+    length = params['length']
     arch = params['arch']
+
+    if(!offset.nil?)
+      offset = offset.to_i()
+    end
+    if(!length.nil?)
+      length = length.to_i()
+    end
 
     return add_status(0, {
       :instructions => b.disassemble(offset, length, arch)
-    })
-  end
-
-  get(/^\/disasm\/x86\/([a-fA-F0-9-]+)/) do |id|
-    b = Binary.find(id)
-
-    return add_status(0, {
-      :instructions => disassemble_x86(b.data, 32)
-    })
-  end
-
-  get(/^\/disasm\/x64\/([a-fA-F0-9-]+)/) do |id|
-    b = Binary.find(id)
-
-    return add_status(0, {
-      :instructions => disassemble_x86(b.data, 64)
     })
   end
 
