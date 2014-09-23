@@ -27,7 +27,7 @@ class Arch
     # TODO: There are more efficient ways to do this
     i_by_address = {}
     @instructions.each do |i|
-      i_by_address[i[:address]] = i
+      i_by_address[i[:offset]] = i
     end
 
     # Deal with jumps / xrefs / etc (note: this isn't really architecture-specific)
@@ -39,7 +39,7 @@ class Arch
       operand = instruction[:instruction][:operands][0]
 
       # If it's not a mandatory jump, it references the next address
-      if(mandatory_jump?(operator))
+      if(!mandatory_jump?(operator))
         if(!@instructions[i+1].nil?)
           refs << @instructions[i+1][:offset]
         end

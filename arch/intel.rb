@@ -73,12 +73,12 @@ class Intel < Arch
       end
 
       instruction = {
-          :operator => instruction.opname,
-          :operands => operands,
+        :operator => instruction.opname,
+        :operands => operands,
       }
 
       result = {
-        :offset => address,
+        :offset => address + @base,
         :raw    => bytes.unpack("H*").pop.gsub(/(..)(?=.)/, '\1 '),
         :type   => "instruction",
         :instruction => instruction,
