@@ -42,7 +42,7 @@ class Intel < Arch
         elsif(arg.is_a?(Metasm::Ia32::Reg))
           operands << {
             :type => 'register',
-            :value => arg.symbolic,
+            :value => arg.to_s,
             :regsize => arg.sz,
             :regnum => arg.val,
           }
