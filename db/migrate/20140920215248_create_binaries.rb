@@ -4,7 +4,7 @@ class CreateBinaries < ActiveRecord::Migration
       t.string(:id, :limit => 36, :primary => true, :null => false)
       t.string(:name)
       t.string(:filename)
-      t.integer(:parent_id)
+      t.string(:parent_id, :limit => 36)
       t.text(:comment)
 
       t.timestamps()
