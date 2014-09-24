@@ -110,6 +110,11 @@ class Vault < Sinatra::Application
     return add_status(0, b.parse(:format => params['format']))
   end
 
+  get(COMMAND('delete')) do |id|
+    b = Binary.find(id)
+    b.destroy()
+  end
+
   get(COMMAND('format')) do |id|
     b = Binary.find(id)
     return add_status(0, { format: b.format() })

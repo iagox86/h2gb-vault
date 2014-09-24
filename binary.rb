@@ -46,6 +46,13 @@ class Binary < ActiveRecord::Base
     end
   end
 
+  def destroy()
+    file = self.filename()
+    File.delete(file)
+
+    super()
+  end
+
   def filename()
     return Binary::UPLOAD_PATH + '/' + self.id
   end
