@@ -1,2 +1,2 @@
-require "./babel"
+require "./vault"
 require "sinatra/activerecord/rake"

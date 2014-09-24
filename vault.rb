@@ -21,13 +21,13 @@ ActiveRecord::Base.establish_connection(
   :encoding => 'utf8',
 )
 
-class Babel < Sinatra::Application
+class Vault < Sinatra::Application
   def add_status(status, table)
     table[:status] = status
     return table
   end
 
-  def Babel.COMMAND(c)
+  def Vault.COMMAND(c)
     return /^\/#{c}\/([a-fA-F0-9-]+)$/
   end
 
