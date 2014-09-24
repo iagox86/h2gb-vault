@@ -2,11 +2,60 @@ require 'metasm'
 require 'arch/arch'
 
 class Intel < Arch
-  MANDATORY_JUMPS = [ "jmp" ]
+  # Basically, these are instructions from which execution will never return
+  MANDATORY_JUMPS = [ "jmp", "ret", "retn" ]
+
+  # These are instructions that may or may not return
   OPTIONAL_JUMPS = [ "jo", "jno", "js", "jns", "je", "jz", "jne", "jnz", "jb", "jnae", "jc", "jnb", "jae", "jnc", "jbe", "jna", "ja", "jnbe", "jl", "jnge", "jge", "jnl", "jle", "jng", "jg", "jnle", "jp", "jpe", "jnp", "jpo", "jcxz", "jecxz" ]
 
-  def initialize(data, offset = 0)
-    super(data, offset)
+  # Registers that affect the stack
+  STACK_REGISTERS = [ "esp", "rsp" ]
+
+  def get_stack_change(instruction)
+    op = instruction[:operator]
+    op1 = instruction[:operands][0]
+    op2 = instruction[:operands][1]
+
+    if(op == 'push')
+      return -self.wordsize / 8
+    end
+
+    if(op == 'pop')
+      return self.wordsize / 8
+    end
+
+    if(op == 'pusha')
+      return -(((self.wordsize / 8) / 2) * 8)
+    end
+
+    if(op == 'popa')
+      return (((self.wordsize / 8) / 2) * 8)
+    end
+
+    if(op == 'pushad')
+      return -((self.wordsize / 8) * 8)
+    end
+
+    if(op == 'popad')
+      return ((self.wordsize / 8) * 8)
+    end
+
+    if(!op1.nil? && op1[:type] == 'register' && STACK_REGISTERS.index(op1[:value]))
+      if(!op2.nil? && op2[:type] == 'immediate')
+        value = op2[:value]
+        if(op == 'add')
+          return value
+        elsif(op == 'sub')
+          return -value
+        end
+      end
+    end
+
+    return 0
+  end
+
+  def initialize(data)
+    super(data)
   end
 
   def mandatory_jump?(i)
@@ -23,7 +72,7 @@ class Intel < Arch
 
     loop do
       start = d.ptr
-      i = cpu.decode_instruction(d, start+@base)
+      i = cpu.decode_instruction(d, start)
 
       if(i.nil?)
         break
@@ -78,12 +127,13 @@ class Intel < Arch
       }
 
       result = {
-        :offset => address + @base,
+        :offset => address,
         :raw    => bytes.unpack("H*").pop.gsub(/(..)(?=.)/, '\1 '),
         :type   => "instruction",
         :instruction => instruction,
         :refs => [],
         :xrefs => [],
+        :stack => get_stack_change(instruction) || 0,
       }
 
       @instructions << result

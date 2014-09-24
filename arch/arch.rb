@@ -3,15 +3,18 @@ require 'metasm'
 class Arch
   attr_reader :instructions
 
-  def initialize(data, base = 0)
+  def initialize(data)
     @data = data
-    @base = base
     @instructions = []
 
     disassemble()
     do_refs()
   end
 
+  # wordsize, in bits
+  def wordsize()
+    raise NotImplementedError
+  end
   def mandatory_jump?(i)
     raise NotImplementedError
   end

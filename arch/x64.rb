@@ -9,8 +9,12 @@ class X64 < Intel
   MANDATORY_JUMPS = [ "jmp" ]
   OPTIONAL_JUMPS = [ "jo", "jno", "js", "jns", "je", "jz", "jne", "jnz", "jb", "jnae", "jc", "jnb", "jae", "jnc", "jbe", "jna", "ja", "jnbe", "jl", "jnge", "jge", "jnl", "jle", "jng", "jg", "jnle", "jp", "jpe", "jnp", "jpo", "jcxz", "jecxz" ]
 
-  def initialize(data, offset = 0)
-    super(data, offset)
+  def initialize(data)
+    super(data)
+  end
+
+  def wordsize()
+    return 64
   end
 
   def disassemble()
