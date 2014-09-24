@@ -3,13 +3,16 @@ require 'arch/arch'
 
 class Intel < Arch
   # Basically, these are instructions from which execution will never return
-  MANDATORY_JUMPS = [ "jmp", "ret", "retn" ]
+  MANDATORY_JUMPS = [ 'jmp' ]
+
+  # Lines that don't carry on
+  DOESNT_RETURN = [ 'ret', 'retn' ]
 
   # These are instructions that may or may not return
-  OPTIONAL_JUMPS = [ "jo", "jno", "js", "jns", "je", "jz", "jne", "jnz", "jb", "jnae", "jc", "jnb", "jae", "jnc", "jbe", "jna", "ja", "jnbe", "jl", "jnge", "jge", "jnl", "jle", "jng", "jg", "jnle", "jp", "jpe", "jnp", "jpo", "jcxz", "jecxz" ]
+  OPTIONAL_JUMPS = [ 'jo', 'jno', 'js', 'jns', 'je', 'jz', 'jne', 'jnz', 'jb', 'jnae', 'jc', 'jnb', 'jae', 'jnc', 'jbe', 'jna', 'ja', 'jnbe', 'jl', 'jnge', 'jge', 'jnl', 'jle', 'jng', 'jg', 'jnle', 'jp', 'jpe', 'jnp', 'jpo', 'jcxz', 'jecxz' ]
 
   # Registers that affect the stack
-  STACK_REGISTERS = [ "esp", "rsp" ]
+  STACK_REGISTERS = [ 'esp', 'rsp' ]
 
   def get_stack_change(instruction)
     op = instruction[:operator]
@@ -64,6 +67,10 @@ class Intel < Arch
 
   def optional_jump?(i)
     return !(OPTIONAL_JUMPS.index(i).nil?)
+  end
+
+  def doesnt_return?(i)
+    return !(DOESNT_RETURN.index(i).nil?)
   end
 
   def disassemble_intel(cpu)

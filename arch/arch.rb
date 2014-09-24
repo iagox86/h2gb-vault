@@ -21,8 +21,14 @@ class Arch
   def optional_jump?(i)
     raise NotImplementedError
   end
+  def doesnt_return?(i)
+    raise NotImplementedError
+  end
   def jump?(i)
     return mandatory_jump?(i) || optional_jump?(i)
+  end
+  def returns?(i)
+    return !mandatory_jump?(i) && !doesnt_return?(i)
   end
 
   def do_refs()
@@ -42,7 +48,7 @@ class Arch
       operand = instruction[:instruction][:operands][0]
 
       # If it's not a mandatory jump, it references the next address
-      if(!mandatory_jump?(operator))
+      if(returns?(operator))
         if(!@instructions[i+1].nil?)
           refs << @instructions[i+1][:offset]
         end
