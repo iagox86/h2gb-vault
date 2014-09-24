@@ -11,6 +11,8 @@ require 'tempfile'
 
 require 'pp' # debug
 
+FORCE_TEXT = true
+
 # Database stuff
 ActiveRecord::Base.establish_connection(
   :adapter => 'sqlite3',
@@ -25,6 +27,41 @@ class Vault < Sinatra::Application
   def add_status(status, table)
     table[:status] = status
     return table
+  end
+
+  def convert_num(n)
+    if(n > 0xFFFF)
+      return '0x%08x' % n
+    elsif(n > 0xFF)
+      return '0x%04x' % n
+    elsif(n > 0)
+      return '0x%02x' % n
+    elsif(n == 0)
+      return '0'
+    else
+      return "-%s" % (convert_num(n.abs()))
+    end
+  end
+
+  def convert_to_text!(h)
+    if(h.is_a?(Hash))
+      h.each do |k, v|
+        if(v.is_a?(Fixnum))
+          h[k] = convert_num(v)
+        elsif(v.is_a?(Hash) || v.is_a?(Array))
+          convert_to_text!(v)
+        end
+      end
+    elsif(h.is_a?(Array))
+      h.each_index do |k|
+        v = h[k]
+        if(v.is_a?(Fixnum))
+          h[k] = convert_num(v)
+        elsif(v.is_a?(Hash) || v.is_a?(Array))
+          convert_to_text!(v)
+        end
+      end
+    end
   end
 
   def Vault.COMMAND(c)
@@ -44,6 +81,10 @@ class Vault < Sinatra::Application
 #        'Access-Control-Allow-Origin' => '*', # TODO: Might not need this forever
         'Content-Disposition' => 'Attachment'
       })
+
+      if(FORCE_TEXT)
+        convert_to_text!(response.body)
+      end
 
       response.body = JSON.pretty_generate(response.body) + "\n"
     end
