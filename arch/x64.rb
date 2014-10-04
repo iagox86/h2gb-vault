@@ -17,7 +17,7 @@ class X64 < Intel
     return 64
   end
 
-  def disassemble()
-    disassemble_intel(Metasm::X86_64.new)
+  def disassemble(base)
+    disassemble_intel(Metasm::X86_64.new(), base)
   end
 end

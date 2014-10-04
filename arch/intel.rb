@@ -73,77 +73,100 @@ class Intel < Arch
     return !(DOESNT_RETURN.index(i).nil?)
   end
 
-  def disassemble_intel(cpu)
+  def disassemble_intel(cpu, base)
     d = Metasm::EncodedData.new(@data)
     @instructions = []
 
-    loop do
-      start = d.ptr
-      i = cpu.decode_instruction(d, start)
+    0.upto(@data.length - 1) do |i|
+      puts("#{i} / #{@data.length - 1}") if((i % 71) == 0)
 
-      if(i.nil?)
-        break
-      end
-      bytes = @data[start,i.bin_length]
-      address = i.address
-      instruction = i.instruction
+      d.ptr = i
+      instruction = cpu.decode_instruction(d, d.ptr + base)
 
-      operands = []
-      instruction.args.each do |arg|
-        if(arg.is_a?(Metasm::Expression))
-          operands << {
-            :type => 'immediate',
-            :value => ("%s%s%s" % [arg.lexpr || '', arg.op || '', arg.rexpr || '']).to_i()
-          }
-        elsif(arg.is_a?(Metasm::Ia32::Reg))
-          operands << {
-            :type => 'register',
-            :value => arg.to_s,
-            :regsize => arg.sz,
-            :regnum => arg.val,
-          }
-        elsif(arg.is_a?(Metasm::Ia32::ModRM))
-          operands << {
-            :type => 'memory',
-            :value => arg.symbolic.to_s(),
+      if(instruction.nil?)
+        bytes = @data[i, 1]
+        offset = i
+        instruction = {
+          :operator => "<unknown>",
+          :operands => []
+        }
+      else
+        bytes = @data[i, instruction.bin_length]
+        offset = i
+        instruction = instruction.instruction
 
-            :segment         => arg.seg,
-            :memsize         => arg.sz,
-            :base_register   => arg.i.to_s(),
-            :multiplier      => arg.s || 1,
-            :offset          => arg.b.to_s(),
-            :immediate       => arg.imm.nil? ? 0 : arg.imm.rexpr,
-          }
-        elsif(arg.is_a?(Metasm::Ia32::SegReg))
-          operands << {
-            :type => 'register',
-            :value => arg.to_s()
-          }
-        else
-          puts("Unknown argument type:")
-          puts(arg.class)
-          puts(arg)
+        operands = []
+        instruction.args.each do |arg|
+          if(arg.is_a?(Metasm::Expression))
+            operands << {
+              :type => 'immediate',
+              :value => ("%s%s%s" % [arg.lexpr || '', arg.op || '', arg.rexpr || '']).to_i()
+            }
+          elsif(arg.is_a?(Metasm::Ia32::Reg))
+            operands << {
+              :type => 'register',
+              :value => arg.to_s,
+              :regsize => arg.sz,
+              :regnum => arg.val,
+            }
+          elsif(arg.is_a?(Metasm::Ia32::ModRM))
+            operands << {
+              :type => 'memory',
+              :value => arg.symbolic.to_s(),
 
-          raise(NotImplementedError)
+              :segment         => arg.seg,
+              :memsize         => arg.sz,
+              :base_register   => arg.i.to_s(),
+              :multiplier      => arg.s || 1,
+              :offset          => arg.b.to_s(),
+              :immediate       => arg.imm.nil? ? 0 : arg.imm.rexpr,
+            }
+          elsif(arg.is_a?(Metasm::Ia32::SegReg))
+            operands << {
+              :type => 'register',
+              :value => arg.to_s()
+            }
+          elsif(arg.is_a?(Metasm::Ia32::FpReg))
+            operands << {
+              :type => "unknown[1]",
+              :value => arg.to_s()
+            }
+          elsif(arg.is_a?(Metasm::Ia32::SimdReg))
+            operands << {
+              :type => 'register',
+              :value => arg.to_s()
+            }
+          elsif(arg.is_a?(Metasm::Ia32::Farptr))
+            operands << {
+              :type => "farptr",
+              :value => arg.to_s()
+            }
+          else
+            puts("Unknown argument type:")
+            puts(arg.class)
+            puts(arg)
+
+            raise(NotImplementedError)
+          end
         end
-      end
 
-      instruction = {
-        :operator => instruction.opname,
-        :operands => operands,
-      }
+        instruction = {
+          :operator => instruction.opname,
+          :operands => operands,
+        }
+      end
 
       result = {
-        :offset => address,
-        :raw    => bytes.unpack("H*").pop.gsub(/(..)(?=.)/, '\1 '),
-        :type   => "instruction",
-        :instruction => instruction,
-        :refs => [],
-        :xrefs => [],
-        :stack => get_stack_change(instruction) || 0,
+        :offset       => i + base,
+        :raw          => bytes,
+        :operator     => instruction[:operator],
+        :operands     => instruction[:operands],
+        :stack_delta  => get_stack_change(instruction) || 0,
       }
 
-      @instructions << result
+      @instructions[i + base] = result
     end
+
+    return @instructions
   end
 end

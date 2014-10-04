@@ -12,9 +12,15 @@ require 'formats/raw'
 require 'arch/x86'
 require 'arch/x64'
 
+# Debug
+require 'pp'
+
 class Binary < ActiveRecord::Base
   # Because I'm using UUIDs for the primary key, this needs to be defined
   self.primary_key = :id
+
+  # Tell ActiveRecord to serialize the instructions field
+  self.serialize(:instructions)
 
   UPLOAD_PATH = File.dirname(__FILE__) + "/uploads"
 
@@ -73,31 +79,25 @@ class Binary < ActiveRecord::Base
     end
   end
 
-  def parse(options)
-    fmt = options[:format] || format()
+  def details()
+
+    if(@details)
+      return @details
+    end
+
+    fmt = format()
 
     if(fmt == "ELF")
-      return parse_elf()
+      @details = parse_elf()
     elsif(fmt == "PE")
-      return parse_pe()
+      @details = parse_pe()
     elsif(fmt == "raw")
-      return parse_raw()
-    else
-      raise NotImplementedError
-    end
-  end
-
-  def disassemble(offset, length, arch)
-    disassembler = nil
-    data = self.data(offset, length)
-    if(arch == 'x86')
-      disassembler = X86.new(data)
-    elsif(arch == 'x64')
-      disassembler = X64.new(data)
+      @details = parse_raw()
     else
       raise NotImplementedError
     end
 
-    return disassembler.instructions
+    return @details
   end
+
 end

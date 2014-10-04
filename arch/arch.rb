@@ -5,10 +5,10 @@ class Arch
 
   def initialize(data)
     @data = data
-    @instructions = []
+  end
 
-    disassemble()
-    do_refs()
+  def disassemble()
+    raise NotImplementedError
   end
 
   # wordsize, in bits
@@ -31,17 +31,18 @@ class Arch
     return !mandatory_jump?(i) && !doesnt_return?(i)
   end
 
-  def do_refs()
+  # TODO: This needs to go at a higher level, it doesn't belong in the disassembler
+  def do_refs(instructions)
     # Create an index of instructions by address
     # TODO: There are more efficient ways to do this
     i_by_address = {}
-    @instructions.each do |i|
+    instructions.each do |i|
       i_by_address[i[:offset]] = i
     end
 
     # Deal with jumps / xrefs / etc (note: this isn't really architecture-specific)
-    0.upto(@instructions.length - 1) do |i|
-      instruction = @instructions[i]
+    0.upto(instructions.length - 1) do |i|
+      instruction = instructions[i]
 
       refs = []
       operator = instruction[:instruction][:operator]
@@ -49,8 +50,8 @@ class Arch
 
       # If it's not a mandatory jump, it references the next address
       if(returns?(operator))
-        if(!@instructions[i+1].nil?)
-          refs << @instructions[i+1][:offset]
+        if(!instructions[i+1].nil?)
+          refs << instructions[i+1][:offset]
         end
       end
 
@@ -66,7 +67,7 @@ class Arch
         end
       end
 
-      @instructions[i][:refs] = refs
+      instructions[i][:refs] = refs
     end
   end
 end

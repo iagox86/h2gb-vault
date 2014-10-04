@@ -14,11 +14,13 @@
 ActiveRecord::Schema.define(version: 20140920215248) do
 
   create_table "binaries", id: false, force: true do |t|
-    t.string   "id",         limit: 36, null: false
+    t.string   "id",           limit: 36, null: false
     t.string   "name"
     t.string   "filename"
-    t.integer  "parent_id"
-    t.text     "comment"
+    t.integer  "base_address"
+    t.string   "comment"
+    t.boolean  "is_processed"
+    t.text     "instructions"
     t.datetime "created_at"
     t.datetime "updated_at"
   end

@@ -1,3 +1,3 @@
-require './vault'
+require './babel'
 
-run Vault.new()
+run Babel.new()

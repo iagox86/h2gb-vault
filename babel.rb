@@ -23,7 +23,7 @@ ActiveRecord::Base.establish_connection(
   :encoding => 'utf8',
 )
 
-class Vault < Sinatra::Application
+class Babel < Sinatra::Application
   def add_status(status, table)
     table[:status] = status
     return table
@@ -64,7 +64,7 @@ class Vault < Sinatra::Application
     end
   end
 
-  def Vault.COMMAND(c)
+  def Babel.COMMAND(c)
     return /^\/#{c}\/([a-fA-F0-9-]+)$/
   end
 
@@ -124,9 +124,10 @@ class Vault < Sinatra::Application
 
   post '/upload' do
     b = Binary.new(
-      :name    => params['filename'],
-      :comment => params['comment'],
-      :data    => params['data'],
+      :name         => params['filename'],
+      :comment      => params['comment'],
+      :data         => params['data'],
+      :is_processed => false,
     )
     b.save()
 
@@ -135,6 +136,12 @@ class Vault < Sinatra::Application
 
   get('/binaries') do
     return add_status(0, {:binaries => Binary.all().as_json() })
+  end
+
+  get(COMMAND('process')) do |id|
+    b = Binary.find(id)
+    b.process()
+    b.save()
   end
 
   get(COMMAND('download')) do |id|
@@ -148,7 +155,7 @@ class Vault < Sinatra::Application
   get(COMMAND('parse')) do |id|
     b = Binary.find(id)
 
-    return add_status(0, b.parse(:format => params['format']))
+    return add_status(0, b.details())
   end
 
   get(COMMAND('delete')) do |id|
