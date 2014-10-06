@@ -3,7 +3,9 @@ $LOAD_PATH << File.dirname(__FILE__)
 require 'sinatra'
 require 'sinatra/activerecord'
 
-require 'binary'
+require 'models/binary'
+require 'models/project'
+require 'models/delta'
 
 require 'fileutils'
 require 'json'

@@ -13,14 +13,27 @@
 
 ActiveRecord::Schema.define(version: 20140920215248) do
 
-  create_table "binaries", id: false, force: true do |t|
-    t.string   "id",           limit: 36, null: false
+  create_table "binaries", force: true do |t|
     t.string   "name"
     t.string   "filename"
+    t.string   "arch"
     t.integer  "base_address"
     t.string   "comment"
     t.boolean  "is_processed"
-    t.text     "instructions"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  create_table "deltas", force: true do |t|
+    t.integer  "project_id"
+    t.text     "deltas"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  create_table "projects", force: true do |t|
+    t.integer  "binary_id"
+    t.text     "view"
     t.datetime "created_at"
     t.datetime "updated_at"
   end
