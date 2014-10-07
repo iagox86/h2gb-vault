@@ -98,6 +98,8 @@ class Memory
     @memory_bytes = []
     @memory_nodes = []
     @segments     = {}
+
+    @actions = []
   end
 
   def find_segment(addr)
@@ -110,21 +112,25 @@ class Memory
     raise SegmentationException
   end
 
-  def delete_node(node)
+  def remove_node(node, rewindable = true)
     node.real_addr.upto(node.real_addr + node.length - 1) do |addr|
       @memory_nodes[addr] = nil
+    end
+
+    if(rewindable)
+      @actions << { :type => :remove, :node => node }
     end
   end
 
   def undefine(addr, len)
     addr.upto(addr + len - 1) do |a|
       if(!@memory_nodes[a].nil?)
-        delete_node(@memory_nodes[a])
+        remove_node(@memory_nodes[a])
       end
     end
   end
 
-  def insert_node(node)
+  def add_node(node, rewindable = true)
     # Make sure we're in a valid segment
     segment = find_segment(node.real_addr)
 
@@ -139,6 +145,25 @@ class Memory
     # Reserve the memory
     node.real_addr.upto(node.real_addr + node.length - 1) do |addr|
       @memory_nodes[addr] = node
+    end
+
+    if(rewindable)
+      @actions << { :type => :add, :node => node }
+    end
+  end
+
+  def rewind(steps = 1)
+    0.upto(steps - 1) do
+      action = @actions.pop
+
+      if(action[:type] == :add)
+        remove_node(action[:node], false)
+      elsif(action[:type] == :remove)
+        add_node(action[:node], false)
+      else
+        puts("Unknown action: #{action[:type]}")
+        raise NotImplementedException
+      end
     end
   end
 
@@ -214,8 +239,22 @@ m.mount_segment(MemorySegment.new("s1", 0x1000, 0x0000, "A" * 16))
 m.mount_segment(MemorySegment.new("s2", 0x2000, 0x0000, "B" * 8))
 
 puts("Inserting new node")
-m.insert_node(MemoryNodeDword.new(0x1000, 0x0000))
-m.insert_node(MemoryNodeWord.new(0x1004, 0x0000))
-m.insert_node(MemoryNodeByte.new(0x1008, 0x0000))
+m.add_node(MemoryNodeDword.new(0x1000, 0x0000))
+m.add_node(MemoryNodeWord.new(0x1004, 0x0000))
+m.add_node(MemoryNodeByte.new(0x1008, 0x0000))
 
 puts(m.to_s)
+
+m.add_node(MemoryNodeDword.new(0x1000, 0x0000))
+m.add_node(MemoryNodeDword.new(0x1004, 0x0000))
+m.add_node(MemoryNodeDword.new(0x1008, 0x0000))
+
+puts(m.to_s)
+puts()
+
+while true do
+  m.rewind(1)
+  puts(m.to_s)
+  gets()
+end
+
