@@ -3,21 +3,53 @@
 # Created October 6, 2014
 
 class MemoryNode
-  attr_reader :type, :segment, :real_addr, :file_addr, :length, :details
+  attr_reader :type, :real_addr, :file_addr, :length
 
-  def initialize(type, segment, real_addr, file_addr, length, details)
+  def initialize(type, real_addr, file_addr, length)
     @type = type
-    @segment = segment
     @real_addr = real_addr
     @file_addr = file_addr
     @length = length
-    @details = details
 
     @xrefs = []
   end
 
-  def to_s()
-    return @details.to_s()
+  def raw(memory)
+    return (memory[@real_addr, @length].map do |c| c.chr end).join
+  end
+
+  def value(memory)
+    return "db 0x%02x" % (memory[@real_addr].ord & 0x0FF)
+  end
+end
+
+class MemoryNodeDword < MemoryNode
+  def initialize(real_addr, file_addr)
+    super("dword", real_addr, file_addr, 4)
+  end
+
+  def value(memory)
+    return "dd 0x%08x" % raw(memory).unpack("I")
+  end
+end
+
+class MemoryNodeWord < MemoryNode
+  def initialize(real_addr, file_addr)
+    super("word", real_addr, file_addr, 2)
+  end
+
+  def value(memory)
+    return "dw 0x%04x" % raw(memory).unpack("S")
+  end
+end
+
+class MemoryNodeByte < MemoryNode
+  def initialize(real_addr, file_addr)
+    super("byte", real_addr, file_addr, 1)
+  end
+
+  def value(memory)
+    return "db 0x%02x" % raw(memory)[0].ord
   end
 end
 
@@ -161,7 +193,7 @@ class Memory
         i += 1
       else
         # We're in a node
-        s += "0x%08x %s\n" % [i, @memory_nodes[i].to_s]
+        s += "0x%08x %s\n" % [i, @memory_nodes[i].value(@memory_bytes)]
         i += @memory_nodes[i].length
       end
     end
@@ -181,20 +213,9 @@ m = Memory.new()
 m.mount_segment(MemorySegment.new("s1", 0x1000, 0x0000, "A" * 16))
 m.mount_segment(MemorySegment.new("s2", 0x2000, 0x0000, "B" * 8))
 
-m.insert_node(MemoryNode.new("dword", "s1", 0x1004, 0x0000, 4, { :value => '0x42424242' }))
-m.insert_node(MemoryNode.new("dword", "s1", 0x100c, 0x0000, 4, { :value => '0x44444444' }))
-
-puts(m.to_s)
-
 puts("Inserting new node")
-m.insert_node(MemoryNode.new("dword", "s1", 0x1000, 0x0000, 1, { :value => "0x41" }))
-m.insert_node(MemoryNode.new("dword", "s1", 0x1001, 0x0000, 1, { :value => "0x41" }))
-m.insert_node(MemoryNode.new("dword", "s1", 0x1002, 0x0000, 1, { :value => "0x41" }))
-m.insert_node(MemoryNode.new("dword", "s1", 0x1003, 0x0000, 1, { :value => "0x41" }))
-m.insert_node(MemoryNode.new("dword", "s1", 0x1008, 0x0000, 1, { :value => "0x41" }))
-m.insert_node(MemoryNode.new("dword", "s1", 0x1009, 0x0000, 1, { :value => "0x41" }))
-m.insert_node(MemoryNode.new("dword", "s1", 0x100a, 0x0000, 1, { :value => "0x41" }))
-m.insert_node(MemoryNode.new("dword", "s1", 0x100b, 0x0000, 1, { :value => "0x41" }))
-m.insert_node(MemoryNode.new("dword", "s1", 0x2001, 0x0000, 1, { :value => "0x44" }))
+m.insert_node(MemoryNodeDword.new(0x1000, 0x0000))
+m.insert_node(MemoryNodeWord.new(0x1004, 0x0000))
+m.insert_node(MemoryNodeByte.new(0x1008, 0x0000))
 
 puts(m.to_s)
