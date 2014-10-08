@@ -47,6 +47,7 @@ class Memory
     @memory_bytes = []
     @memory_nodes = []
     @segments     = {}
+    @memory_xrefs = []
 
     @actions = []
   end
@@ -64,6 +65,13 @@ class Memory
   def remove_node(node, rewindable = true)
     node[:address].upto(node[:address] + node[:length] - 1) do |addr|
       @memory_nodes[addr] = nil
+    end
+
+    node[:refs].each do |ref|
+      # It shouldn't ever be nil, but...
+      if(!@memory_xrefs[ref].nil?)
+        @memory_xrefs[ref].delete(node[:address])
+      end
     end
 
     if(rewindable)
@@ -94,6 +102,13 @@ class Memory
     # Save the node to memory
     node[:address].upto(node[:address]+node[:length] - 1) do |addr|
       @memory_nodes[addr] = node
+    end
+
+    node[:refs].each do |ref|
+      if(@memory_xrefs[ref].nil?)
+        @memory_xrefs[ref] = []
+      end
+      @memory_xrefs[ref] << node[:address]
     end
 
     if(rewindable)
@@ -186,11 +201,27 @@ class Memory
     each_node do |addr, node|
       if(node.nil?)
         # We're not in a node, but we do have valid bytes/memory
-        s += "0x%08x %02x <undefined>\n" % [addr, @memory_bytes[addr].ord]
+        s += "0x%08x %02x <undefined>" % [addr, @memory_bytes[addr].ord]
+
+        xrefs = get_xrefs_to_node({:address => addr, :length => 1})
+        if(xrefs.length > 0)
+          s += " XREFS: " + (xrefs.map do |ref| '0x%08x' % ref; end).join(', ')
+        end
       else
         # We're in a node
-        s += "0x%08x %s\n" % [addr, node[:details]]
+        s += "0x%08x %s" % [addr, node[:details]]
+
+        refs = node[:refs]
+        if(!refs.nil? && refs.length > 0)
+          s += " REFS: " + (refs.map do |ref| '0x%08x' % ref; end).join(', ')
+        end
+
+        xrefs = get_xrefs_to_node(node)
+        if(xrefs.length > 0)
+          s += " XREFS: " + (xrefs.map do |ref| '0x%08x' % ref; end).join(', ')
+        end
       end
+      s += "\n"
     end
 
     return s
@@ -212,6 +243,17 @@ class Memory
     return get_bytes_at(addr, 1).ord
   end
 
+  def get_xrefs_to_node(node)
+    xrefs = []
+    node[:address].upto(node[:address] + node[:length] - 1) do |addr|
+      if(!@memory_xrefs[addr].nil?)
+        xrefs += @memory_xrefs[addr]
+      end
+    end
+
+    return xrefs
+  end
+
   def get_nodes()
     nodes = []
 
@@ -223,6 +265,7 @@ class Memory
           :length  => 1,
           :details => {},
           :refs    => [],
+          :xrefs   => @memory_xrefs[addr],
         }
       else
         nodes << {
@@ -230,10 +273,11 @@ class Memory
           :address => node[:address],
           :length  => node[:length],
           :details => node[:details],
+          :refs    => node[:refs],
 
           # TODO
           :file_address => "TODO",
-          :xrefs        => ["TODO"],
+          :xrefs        => get_xrefs_to_node(node),
         }
       end
     end
@@ -245,28 +289,25 @@ end
 m = Memory.new()
 
 m.mount_segment(MemorySegment.new("s1", 0x1000, 0x0000, "A" * 16))
-m.mount_segment(MemorySegment.new("s2", 0x2000, 0x0000, "B" * 8))
+m.mount_segment(MemorySegment.new("s2", 0x2000, 0x0000, "B" * 16))
 
-puts("Inserting new node")
-m.add_node('dword', 0x1000, 4, { value: m.get_dword_at(0x1000) })
-m.add_node('word',  0x1004, 2, { value: m.get_word_at(0x1004) })
-m.add_node('byte', 0x1008, 1, { value: m.get_byte_at(0x1008) })
-
-puts(m.to_s)
-
-m.add_node('dword', 0x1000, 4, { value: m.get_dword_at(0x1000) })
-m.add_node('word',  0x1004, 4, { value: m.get_dword_at(0x1004) })
-m.add_node('byte',  0x1008, 4, { value: m.get_dword_at(0x1008) })
+m.add_node('dword', 0x1000, 4, { value: m.get_dword_at(0x1000) }, [0x1004])
+m.add_node('word',  0x1004, 2, { value: m.get_word_at(0x1004) }, [0x1008])
+m.add_node('byte', 0x1008, 1, { value: m.get_byte_at(0x1008) }, [0x1001])
 
 puts(m.to_s)
-puts()
+gets()
 
-puts(m.get_nodes.inspect)
-puts()
+m.add_node('dword', 0x1000, 4, { value: m.get_dword_at(0x1000) }, [0x2000])
+m.add_node('word',  0x1004, 4, { value: m.get_dword_at(0x1004) }, [0x2004])
+m.add_node('byte',  0x1008, 4, { value: m.get_dword_at(0x1008) }, [0x2008])
+
+puts(m.to_s)
+gets()
 
 while true do
+  gets()
   m.rewind(1)
   puts(m.to_s)
-  gets()
 end
 
