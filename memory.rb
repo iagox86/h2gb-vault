@@ -16,18 +16,8 @@ class MemorySegment
     return @data.length
   end
 
-  def contains?(addr, len)
-    return (addr >= @real_addr) && ((addr + len - 1) < (@real_addr + length()))
-  end
-
-  def contains_node?(node)
-    return contains?(node.real_addr, node.length)
-  end
-
-  def each_address()
-    @real_addr.upto(length() - 1) do |a|
-      yield(address)
-    end
+  def real_to_file_address(real_addr)
+    return real_addr - @real_addr + @file_addr
   end
 
   def to_s()
@@ -44,33 +34,31 @@ class Memory
   end
 
   def initialize()
-    @memory_bytes = []
-    @memory_nodes = []
-    @segments     = {}
-    @memory_xrefs = []
+    # The byte-by-byte memory
+    @memory   = []
 
-    @actions = []
+    # The metadata about memory
+    @overlay  = []
+
+    # Segment info
+    @segments = {}
+
+    # Undo info
+    @actions  = []
   end
 
-#  def find_segment(addr)
-#    @segments.each_pair do |_, s|
-#      if(addr >= s.real_addr && addr < (s.real_addr + s.length))
-#        return s
-#      end
-#    end
-#
-#    raise SegmentationException
-#  end
-
   def remove_node(node, rewindable = true)
+    # Remove the node from the overlay
     node[:address].upto(node[:address] + node[:length] - 1) do |addr|
-      @memory_nodes[addr] = nil
+      @overlay[addr][:node] = nil
     end
 
+    # Go through its references, and remove xrefs as necessary
     node[:refs].each do |ref|
+      xrefs = @overlay[ref][:xrefs]
       # It shouldn't ever be nil, but...
-      if(!@memory_xrefs[ref].nil?)
-        @memory_xrefs[ref].delete(node[:address])
+      if(!xrefs.nil?)
+        xrefs.delete(node[:address])
       end
     end
 
@@ -81,17 +69,17 @@ class Memory
 
   def undefine(addr, len)
     addr.upto(addr + len - 1) do |a|
-      if(!@memory_nodes[a].nil?)
-        remove_node(@memory_nodes[a])
+      if(!@overlay[a][:node].nil?)
+        remove_node(@overlay[a][:node])
       end
     end
   end
 
   def add_node_internal(node, rewindable = true)
-    # Make sure there's enough room
+    # Make sure there's enough room for the entire node
     node[:address].upto(node[:address]+node[:length] - 1) do |addr|
       # There's no memory
-      if(@memory_bytes[addr].nil?)
+      if(@memory[addr].nil?)
         raise SegmentationException
       end
     end
@@ -101,14 +89,15 @@ class Memory
 
     # Save the node to memory
     node[:address].upto(node[:address]+node[:length] - 1) do |addr|
-      @memory_nodes[addr] = node
+      @overlay[addr][:node] = node
     end
 
     node[:refs].each do |ref|
-      if(@memory_xrefs[ref].nil?)
-        @memory_xrefs[ref] = []
-      end
-      @memory_xrefs[ref] << node[:address]
+      # Make sure we have an array
+      @overlay[ref][:xrefs] = @overlay[ref][:xrefs] || []
+
+      # Record the cross reference
+      @overlay[ref][:xrefs] << node[:address]
     end
 
     if(rewindable)
@@ -143,7 +132,7 @@ class Memory
 
   def mount_segment(segment)
     # Make sure the memory isn't already in use
-    memory = @memory_nodes[segment.real_addr, segment.length]
+    memory = @memory[segment.real_addr, segment.length]
     if(!(memory.nil? || memory.compact().length() == 0))
       raise OverlappingSegmentException
     end
@@ -151,8 +140,11 @@ class Memory
     # Keep track of the mount so we can unmount later
     @segments[segment.name] = segment
 
-    # Insert the data
-    @memory_bytes[segment.real_addr, segment.length] = segment.data
+    # Map the data into memory
+    @memory[segment.real_addr, segment.length] = segment.data
+
+    # Make room for the overlay
+    @overlay[segment.real_addr, segment.length] = [{}] * segment.length
   end
 
   def unmount_segment(name)
@@ -165,28 +157,67 @@ class Memory
     # Undefine its entire space
     undefine(segment.real_addr, segment.length - 1)
 
-    # Delete the data
-    @memory_bytes[segment.real_addr, segment.length] = [nil] * segment.length
+    # Delete the data and the overlay
+    @memory[segment.real_addr, segment.length] = [nil] * segment.length
+    @overlay[segment.real_addr, segment.length] = [nil] * segment.length
 
-    # Delete it
+    # Remove any nils on the end
+    @memory.pop until @memory.last
+    @overlay.pop until @overlay.last
+
+    # Delete it from the segments table
     @segments.delete(name)
+  end
+
+  def get_overlay_at(addr)
+    memory = @memory[addr]
+    overlay = @overlay[addr]
+
+    # Make sure we aren't in a weird situation
+    if(memory.nil? && !overlay.nil?)
+      puts("Something bad is happening...")
+      raise Exception
+    end
+
+    # If we aren't in a defined segment, return nil
+    if(memory.nil?)
+      return nil
+    end
+
+    # Start with the basic result
+    result = overlay.clone
+
+    # If we aren't somewhere with an actual node, make a fake one
+    if(overlay[:node].nil?)
+      result[:node] = {
+        :type    => 'undefined',
+        :address => addr,
+        :length  => 1,
+        :refs    => [],
+      }
+    else
+      result[:node] = overlay[:node].clone
+    end
+
+    # Add extra fields that we magically have
+    result[:raw] = get_bytes_at(addr, result[:node][:length])
+
+    # And that's it!
+    return result
   end
 
   def each_node()
     i = 0
 
-    while(i < @memory_bytes.length) do
-      if(@memory_nodes[i].nil? && @memory_bytes[i].nil?)
-        # We're between segments, do nothing
-        i += 1
-      elsif(@memory_nodes[i].nil?)
-        # We're not in a node, but we do have valid bytes/memory
-        yield i, nil
+    while(i < @overlay.length) do
+      overlay = get_overlay_at(i)
+
+      # If there was no overlay, just move on
+      if(overlay.nil?)
         i += 1
       else
-        # We're in a node
-        yield i, @memory_nodes[i]
-        i += @memory_nodes[i][:length]
+        yield i, overlay
+        i += overlay[:node][:length]
       end
     end
   end
@@ -198,28 +229,16 @@ class Memory
       s += segment.to_s + "\n"
     end
 
-    each_node do |addr, node|
-      if(node.nil?)
-        # We're not in a node, but we do have valid bytes/memory
-        s += "0x%08x %02x <undefined>" % [addr, @memory_bytes[addr].ord]
+    each_node do |addr, overlay|
+      s += "0x%08x %s %s" % [addr, overlay[:raw].unpack("H*").pop, overlay[:node][:details]]
 
-        xrefs = get_xrefs_to_node({:address => addr, :length => 1})
-        if(xrefs.length > 0)
-          s += " XREFS: " + (xrefs.map do |ref| '0x%08x' % ref; end).join(', ')
-        end
-      else
-        # We're in a node
-        s += "0x%08x %s" % [addr, node[:details]]
+      refs = overlay[:node][:refs]
+      if(!refs.nil? && refs.length > 0)
+        s += " REFS: " + (refs.map do |ref| '0x%08x' % ref; end).join(', ')
+      end
 
-        refs = node[:refs]
-        if(!refs.nil? && refs.length > 0)
-          s += " REFS: " + (refs.map do |ref| '0x%08x' % ref; end).join(', ')
-        end
-
-        xrefs = get_xrefs_to_node(node)
-        if(xrefs.length > 0)
-          s += " XREFS: " + (xrefs.map do |ref| '0x%08x' % ref; end).join(', ')
-        end
+      if(!overlay[:xrefs].nil? && overlay[:xrefs].length > 0)
+        s += " XREFS: " + (overlay[:xrefs].map do |ref| '0x%08x' % ref; end).join(', ')
       end
       s += "\n"
     end
@@ -228,7 +247,7 @@ class Memory
   end
 
   def get_bytes_at(addr, length)
-    return (@memory_bytes[addr, length].map do |c| c.chr end).join
+    return (@memory[addr, length].map do |c| c.chr end).join
   end
 
   def get_dword_at(addr)
@@ -243,46 +262,47 @@ class Memory
     return get_bytes_at(addr, 1).ord
   end
 
-  def get_xrefs_to_node(node)
-    xrefs = []
-    node[:address].upto(node[:address] + node[:length] - 1) do |addr|
-      if(!@memory_xrefs[addr].nil?)
-        xrefs += @memory_xrefs[addr]
-      end
-    end
-
-    return xrefs
-  end
+#  def get_xrefs_to_node(node)
+#    xrefs = []
+#    node[:address].upto(node[:address] + node[:length] - 1) do |addr|
+#      if(!@memory_xrefs[addr].nil?)
+#        xrefs += @memory_xrefs[addr]
+#      end
+#    end
+#
+#    return xrefs
+#  end
 
   def get_nodes()
-    nodes = []
-
-    each_node do |addr, node|
-      if(node.nil?)
-        nodes << {
-          :type    => 'undefined',
-          :address => addr,
-          :length  => 1,
-          :details => {},
-          :refs    => [],
-          :xrefs   => @memory_xrefs[addr],
-        }
-      else
-        nodes << {
-          :type    => node[:type],
-          :address => node[:address],
-          :length  => node[:length],
-          :details => node[:details],
-          :refs    => node[:refs],
-
-          # TODO
-          :file_address => "TODO",
-          :xrefs        => get_xrefs_to_node(node),
-        }
-      end
-    end
-
-    return nodes
+    return ['todo']
+#    nodes = []
+#
+#    each_node do |addr, node|
+#      if(node.nil?)
+#        nodes << {
+#          :type    => 'undefined',
+#          :address => addr,
+#          :length  => 1,
+#          :details => {},
+#          :refs    => [],
+#          :xrefs   => @memory_xrefs[addr],
+#        }
+#      else
+#        nodes << {
+#          :type    => node[:type],
+#          :address => node[:address],
+#          :length  => node[:length],
+#          :details => node[:details],
+#          :refs    => node[:refs],
+#
+#          # TODO
+#          :file_address => "TODO",
+#          :xrefs        => get_xrefs_to_node(node),
+#        }
+#      end
+#    end
+#
+#    return nodes
   end
 end
 
@@ -295,7 +315,9 @@ m.add_node('dword', 0x1000, 4, { value: m.get_dword_at(0x1000) }, [0x1004])
 m.add_node('word',  0x1004, 2, { value: m.get_word_at(0x1004) }, [0x1008])
 m.add_node('byte', 0x1008, 1, { value: m.get_byte_at(0x1008) }, [0x1001])
 
+
 puts(m.to_s)
+exit
 gets()
 
 m.add_node('dword', 0x1000, 4, { value: m.get_dword_at(0x1000) }, [0x2000])
