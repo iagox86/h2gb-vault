@@ -2,57 +2,6 @@
 # By Ron Bowes
 # Created October 6, 2014
 
-#class MemoryNode
-#  attr_reader :type, :real_addr, :file_addr, :length
-#
-#  def initialize(type, real_addr, file_addr, length)
-#    @type = type
-#    @real_addr = real_addr
-#    @file_addr = file_addr
-#    @length = length
-#
-#    @xrefs = []
-#  end
-#
-#  def raw(memory)
-#    return (memory[@real_addr, @length].map do |c| c.chr end).join
-#  end
-#
-#  def value(memory)
-#    return "db 0x%02x" % (memory[@real_addr].ord & 0x0FF)
-#  end
-#end
-#
-#class MemoryNodeDword < MemoryNode
-#  def initialize(real_addr, file_addr)
-#    super("dword", real_addr, file_addr, 4)
-#  end
-#
-#  def value(memory)
-#    return "dd 0x%08x" % raw(memory).unpack("I")
-#  end
-#end
-#
-#class MemoryNodeWord < MemoryNode
-#  def initialize(real_addr, file_addr)
-#    super("word", real_addr, file_addr, 2)
-#  end
-#
-#  def value(memory)
-#    return "dw 0x%04x" % raw(memory).unpack("S")
-#  end
-#end
-#
-#class MemoryNodeByte < MemoryNode
-#  def initialize(real_addr, file_addr)
-#    super("byte", real_addr, file_addr, 1)
-#  end
-#
-#  def value(memory)
-#    return "db 0x%02x" % raw(memory)[0].ord
-#  end
-#end
-
 class MemorySegment
   attr_reader :name, :real_addr, :file_addr, :data
 
@@ -152,12 +101,13 @@ class Memory
     end
   end
 
-  def add_node(type, address, length, details, rewindable = true)
+  def add_node(type, address, length, details, refs = [], rewindable = true)
     return add_node_internal({
       :type    => type,
       :address => address,
       :length  => length,
-      :details => details
+      :details => details,
+      :refs    => refs,
     }, rewindable)
   end
 
@@ -207,6 +157,25 @@ class Memory
     @segments.delete(name)
   end
 
+  def each_node()
+    i = 0
+
+    while(i < @memory_bytes.length) do
+      if(@memory_nodes[i].nil? && @memory_bytes[i].nil?)
+        # We're between segments, do nothing
+        i += 1
+      elsif(@memory_nodes[i].nil?)
+        # We're not in a node, but we do have valid bytes/memory
+        yield i, nil
+        i += 1
+      else
+        # We're in a node
+        yield i, @memory_nodes[i]
+        i += @memory_nodes[i][:length]
+      end
+    end
+  end
+
   def to_s()
     s = ""
 
@@ -214,21 +183,13 @@ class Memory
       s += segment.to_s + "\n"
     end
 
-    i = 0
-
-    while(i < @memory_bytes.length) do
-      # Check if there's a node defined
-      if(@memory_nodes[i].nil? && @memory_bytes[i].nil?)
-        # We're between segments, do nothing
-        i += 1
-      elsif(@memory_nodes[i].nil?)
+    each_node do |addr, node|
+      if(node.nil?)
         # We're not in a node, but we do have valid bytes/memory
-        s += "0x%08x %02x <undefined>\n" % [i, @memory_bytes[i].ord]
-        i += 1
+        s += "0x%08x %02x <undefined>\n" % [addr, @memory_bytes[addr].ord]
       else
         # We're in a node
-        s += "0x%08x %s\n" % [i, @memory_nodes[i][:details]]
-        i += @memory_nodes[i].length
+        s += "0x%08x %s\n" % [addr, node[:details]]
       end
     end
 
@@ -250,6 +211,35 @@ class Memory
   def get_byte_at(addr)
     return get_bytes_at(addr, 1).ord
   end
+
+  def get_nodes()
+    nodes = []
+
+    each_node do |addr, node|
+      if(node.nil?)
+        nodes << {
+          :type    => 'undefined',
+          :address => addr,
+          :length  => 1,
+          :details => {},
+          :refs    => [],
+        }
+      else
+        nodes << {
+          :type    => node[:type],
+          :address => node[:address],
+          :length  => node[:length],
+          :details => node[:details],
+
+          # TODO
+          :file_address => "TODO",
+          :xrefs        => ["TODO"],
+        }
+      end
+    end
+
+    return nodes
+  end
 end
 
 m = Memory.new()
@@ -269,6 +259,9 @@ m.add_node('word',  0x1004, 4, { value: m.get_dword_at(0x1004) })
 m.add_node('byte',  0x1008, 4, { value: m.get_dword_at(0x1008) })
 
 puts(m.to_s)
+puts()
+
+puts(m.get_nodes.inspect)
 puts()
 
 while true do
