@@ -214,6 +214,9 @@ class Memory
       result.node = overlay.node.clone
     end
 
+    # Add extra fields that we magically have
+    result.raw = get_bytes_at(addr, result.node.length)
+
     # And that's it!
     return result
   end
