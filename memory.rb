@@ -27,6 +27,16 @@ class MemoryNode
   end
 end
 
+class MemoryOverlay
+  attr_accessor :node, :raw, :xrefs
+
+  def initialize(node = nil, raw = nil, xrefs = nil)
+    @node = node
+    @raw = raw || ""
+    @xrefs = xrefs || []
+  end
+end
+
 class MemorySegment
   attr_reader :name, :real_addr, :file_addr, :data
 
@@ -79,12 +89,12 @@ class Memory
   def remove_node(node, rewindable = true)
     # Remove the node from the overlay
     node.address.upto(node.address + node.length - 1) do |addr|
-      @overlay[addr][:node] = nil
+      @overlay[addr].node = nil
     end
 
     # Go through its references, and remove xrefs as necessary
     node.refs.each do |ref|
-      xrefs = @overlay[ref][:xrefs]
+      xrefs = @overlay[ref].xrefs
       # It shouldn't ever be nil, but...
       if(!xrefs.nil?)
         xrefs.delete(node.address)
@@ -98,8 +108,8 @@ class Memory
 
   def undefine(addr, len)
     addr.upto(addr + len - 1) do |a|
-      if(!@overlay[a][:node].nil?)
-        remove_node(@overlay[a][:node])
+      if(!@overlay[a].node.nil?)
+        remove_node(@overlay[a].node)
       end
     end
   end
@@ -118,15 +128,12 @@ class Memory
 
     # Save the node to memory
     node.address.upto(node.address + node.length - 1) do |addr|
-      @overlay[addr][:node] = node
+      @overlay[addr].node = node
     end
 
     node.refs.each do |ref|
-      # Make sure we have an array
-      @overlay[ref][:xrefs] = @overlay[ref][:xrefs] || []
-
       # Record the cross reference
-      @overlay[ref][:xrefs] << node.address
+      @overlay[ref].xrefs << node.address
     end
 
     if(rewindable)
@@ -153,11 +160,9 @@ class Memory
     # Map the data into memory
     @memory[segment.real_addr, segment.length] = segment.data
 
-    # Make room for the overlay
-    puts(segment.real_addr)
-    puts(segment.length)
-    segment.real_addr.upto(segment.real_addr + segment.length - 1) do |i|
-      @overlay[i] = {}
+    # Create some empty overlays
+    segment.real_addr.upto(segment.real_addr + segment.length - 1) do |addr|
+      @overlay[addr] = MemoryOverlay.new(nil) # TODO: I can set 'raw' here
     end
   end
 
@@ -173,11 +178,12 @@ class Memory
 
     # Delete the data and the overlay
     @memory[segment.real_addr, segment.length] = [nil] * segment.length
-    @overlay[segment.real_addr, segment.length] = [nil] * segment.length
 
-    # Remove any nils on the end
-    @memory.pop until @memory.last
-    @overlay.pop until @overlay.last
+    # Get rid of the overlays
+    # TODO: Use a segment.each_addr() thing
+    segment.real_addr.upto(segment.real_addr + segment.length - 1) do |addr|
+      @overlay[addr] = nil
+    end
 
     # Delete it from the segments table
     @segments.delete(name)
@@ -202,14 +208,11 @@ class Memory
     result = overlay.clone
 
     # If we aren't somewhere with an actual node, make a fake one
-    if(overlay[:node].nil?)
-      result[:node] = MemoryNode.new("undefined", addr, 1, { :value => "undefined" })
+    if(overlay.node.nil?)
+      result.node = MemoryNode.new("undefined", addr, 1, { :value => "undefined" })
     else
-      result[:node] = overlay[:node].clone
+      result.node = overlay.node.clone
     end
-
-    # Add extra fields that we magically have
-    result[:raw] = get_bytes_at(addr, result[:node].length)
 
     # And that's it!
     return result
@@ -226,7 +229,7 @@ class Memory
         i += 1
       else
         yield i, overlay
-        i += overlay[:node].length
+        i += overlay.node.length
       end
     end
   end
@@ -239,15 +242,15 @@ class Memory
     end
 
     each_node do |addr, overlay|
-      s += "0x%08x %s %s %s" % [addr, overlay[:raw].unpack("H*").pop, overlay[:node].type, overlay[:node].details]
+      s += "0x%08x %s %s %s" % [addr, overlay.raw.unpack("H*").pop, overlay.node.type, overlay.node.details]
 
-      refs = overlay[:node].refs
+      refs = overlay.node.refs
       if(!refs.nil? && refs.length > 0)
         s += " REFS: " + (refs.map do |ref| '0x%08x' % ref; end).join(', ')
       end
 
-      if(!overlay[:xrefs].nil? && overlay[:xrefs].length > 0)
-        s += " XREFS: " + (overlay[:xrefs].map do |ref| '0x%08x' % ref; end).join(', ')
+      if(overlay.xrefs.length > 0)
+        s += " XREFS: " + (overlay.xrefs.map do |ref| '0x%08x' % ref; end).join(', ')
       end
       s += "\n"
     end
