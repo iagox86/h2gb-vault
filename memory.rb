@@ -2,6 +2,31 @@
 # By Ron Bowes
 # Created October 6, 2014
 
+class MemoryNode
+  attr_reader :type, :address, :length, :details, :refs
+
+  attr_reader :raw # TODO
+
+  def initialize(type, address, length, details, refs = [])
+    @type = type
+    @address = address
+    @length = length
+    @details = details
+    @refs = refs
+
+    # TODO: Change this
+    @raw = ""
+  end
+
+  def to_s()
+    # TODO
+  end
+
+  def to_json()
+    # TODO
+  end
+end
+
 class MemorySegment
   attr_reader :name, :real_addr, :file_addr, :data
 
@@ -22,6 +47,10 @@ class MemorySegment
 
   def to_s()
     return "Segment: %s (0x%08x - 0x%08x)" % [@name, @real_addr, @real_addr + length()]
+  end
+
+  def to_json()
+    # TODO
   end
 end
 
@@ -49,16 +78,16 @@ class Memory
 
   def remove_node(node, rewindable = true)
     # Remove the node from the overlay
-    node[:address].upto(node[:address] + node[:length] - 1) do |addr|
+    node.address.upto(node.address + node.length - 1) do |addr|
       @overlay[addr][:node] = nil
     end
 
     # Go through its references, and remove xrefs as necessary
-    node[:refs].each do |ref|
+    node.refs.each do |ref|
       xrefs = @overlay[ref][:xrefs]
       # It shouldn't ever be nil, but...
       if(!xrefs.nil?)
-        xrefs.delete(node[:address])
+        xrefs.delete(node.address)
       end
     end
 
@@ -77,7 +106,7 @@ class Memory
 
   def add_node_internal(node, rewindable = true)
     # Make sure there's enough room for the entire node
-    node[:address].upto(node[:address]+node[:length] - 1) do |addr|
+    node.address.upto(node.address + node.length - 1) do |addr|
       # There's no memory
       if(@memory[addr].nil?)
         raise SegmentationException
@@ -85,19 +114,19 @@ class Memory
     end
 
     # Make sure the nodes are undefined
-    undefine(node[:address], node[:length])
+    undefine(node.address, node.length)
 
     # Save the node to memory
-    node[:address].upto(node[:address]+node[:length] - 1) do |addr|
+    node.address.upto(node.address + node.length - 1) do |addr|
       @overlay[addr][:node] = node
     end
 
-    node[:refs].each do |ref|
+    node.refs.each do |ref|
       # Make sure we have an array
       @overlay[ref][:xrefs] = @overlay[ref][:xrefs] || []
 
       # Record the cross reference
-      @overlay[ref][:xrefs] << node[:address]
+      @overlay[ref][:xrefs] << node.address
     end
 
     if(rewindable)
@@ -106,28 +135,9 @@ class Memory
   end
 
   def add_node(type, address, length, details, refs = [], rewindable = true)
-    return add_node_internal({
-      :type    => type,
-      :address => address,
-      :length  => length,
-      :details => details,
-      :refs    => refs,
-    }, rewindable)
-  end
+    node = MemoryNode.new(type, address, length, details, refs)
 
-  def rewind(steps = 1)
-    0.upto(steps - 1) do
-      action = @actions.pop
-
-      if(action[:type] == :add)
-        remove_node(action[:node], false)
-      elsif(action[:type] == :remove)
-        add_node_internal(action[:node], false)
-      else
-        puts("Unknown action: #{action[:type]}")
-        raise NotImplementedException
-      end
-    end
+    return add_node_internal(node, rewindable)
   end
 
   def mount_segment(segment)
@@ -193,18 +203,13 @@ class Memory
 
     # If we aren't somewhere with an actual node, make a fake one
     if(overlay[:node].nil?)
-      result[:node] = {
-        :type    => 'undefined',
-        :address => addr,
-        :length  => 1,
-        :refs    => [],
-      }
+      result[:node] = MemoryNode.new("undefined", addr, 1, { :value => "undefined" })
     else
       result[:node] = overlay[:node].clone
     end
 
     # Add extra fields that we magically have
-    result[:raw] = get_bytes_at(addr, result[:node][:length])
+    result[:raw] = get_bytes_at(addr, result[:node].length)
 
     # And that's it!
     return result
@@ -221,7 +226,7 @@ class Memory
         i += 1
       else
         yield i, overlay
-        i += overlay[:node][:length]
+        i += overlay[:node].length
       end
     end
   end
@@ -234,9 +239,9 @@ class Memory
     end
 
     each_node do |addr, overlay|
-      s += "0x%08x %s %s %s" % [addr, overlay[:raw].unpack("H*").pop, overlay[:node][:type], overlay[:node][:details]]
+      s += "0x%08x %s %s %s" % [addr, overlay[:raw].unpack("H*").pop, overlay[:node].type, overlay[:node].details]
 
-      refs = overlay[:node][:refs]
+      refs = overlay[:node].refs
       if(!refs.nil? && refs.length > 0)
         s += " REFS: " + (refs.map do |ref| '0x%08x' % ref; end).join(', ')
       end
@@ -282,11 +287,11 @@ class Memory
 #        }
 #      else
 #        nodes << {
-#          :type    => node[:type],
-#          :address => node[:address],
-#          :length  => node[:length],
-#          :details => node[:details],
-#          :refs    => node[:refs],
+#          :type    => node.type,
+#          :address => node.address,
+#          :length  => node.length,
+#          :details => node.details,
+#          :refs    => node.refs,
 #
 #          # TODO
 #          :file_address => "TODO",
@@ -297,6 +302,22 @@ class Memory
 #
 #    return nodes
   end
+
+  def rewind(steps = 1)
+    0.upto(steps - 1) do
+      action = @actions.pop
+
+      if(action[:type] == :add)
+        remove_node(action[:node], false)
+      elsif(action[:type] == :remove)
+        add_node_internal(action[:node], false)
+      else
+        puts("Unknown action: #{action[:type]}")
+        raise NotImplementedException
+      end
+    end
+  end
+
 end
 
 m = Memory.new()
