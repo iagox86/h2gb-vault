@@ -62,6 +62,12 @@ class MemorySegment
   def to_json()
     # TODO
   end
+
+  def each_addr()
+    @real_addr.upto(@real_addr + length() - 1) do |addr|
+      yield(addr)
+    end
+  end
 end
 
 class Memory
@@ -161,8 +167,8 @@ class Memory
     @memory[segment.real_addr, segment.length] = segment.data
 
     # Create some empty overlays
-    segment.real_addr.upto(segment.real_addr + segment.length - 1) do |addr|
-      @overlay[addr] = MemoryOverlay.new(nil) # TODO: I can set 'raw' here
+    segment.each_addr do |addr|
+      @overlay[addr] = MemoryOverlay.new(nil)
     end
   end
 
