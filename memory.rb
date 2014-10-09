@@ -144,7 +144,11 @@ class Memory
     @memory[segment.real_addr, segment.length] = segment.data
 
     # Make room for the overlay
-    @overlay[segment.real_addr, segment.length] = [{}] * segment.length
+    puts(segment.real_addr)
+    puts(segment.length)
+    segment.real_addr.upto(segment.real_addr + segment.length - 1) do |i|
+      @overlay[i] = {}
+    end
   end
 
   def unmount_segment(name)
@@ -170,7 +174,7 @@ class Memory
   end
 
   def get_overlay_at(addr)
-    memory = @memory[addr]
+    memory  = @memory[addr]
     overlay = @overlay[addr]
 
     # Make sure we aren't in a weird situation
@@ -230,7 +234,7 @@ class Memory
     end
 
     each_node do |addr, overlay|
-      s += "0x%08x %s %s" % [addr, overlay[:raw].unpack("H*").pop, overlay[:node][:details]]
+      s += "0x%08x %s %s %s" % [addr, overlay[:raw].unpack("H*").pop, overlay[:node][:type], overlay[:node][:details]]
 
       refs = overlay[:node][:refs]
       if(!refs.nil? && refs.length > 0)
@@ -261,17 +265,6 @@ class Memory
   def get_byte_at(addr)
     return get_bytes_at(addr, 1).ord
   end
-
-#  def get_xrefs_to_node(node)
-#    xrefs = []
-#    node[:address].upto(node[:address] + node[:length] - 1) do |addr|
-#      if(!@memory_xrefs[addr].nil?)
-#        xrefs += @memory_xrefs[addr]
-#      end
-#    end
-#
-#    return xrefs
-#  end
 
   def get_nodes()
     return ['todo']
@@ -308,16 +301,14 @@ end
 
 m = Memory.new()
 
-m.mount_segment(MemorySegment.new("s1", 0x1000, 0x0000, "A" * 16))
-m.mount_segment(MemorySegment.new("s2", 0x2000, 0x0000, "B" * 16))
+m.mount_segment(MemorySegment.new("s1", 0x1000, 0x0000, "ABCDEFGHIJKLMNOP"))
+m.mount_segment(MemorySegment.new("s2", 0x2000, 0x0000, "abcdefghijklmnop"))
 
 m.add_node('dword', 0x1000, 4, { value: m.get_dword_at(0x1000) }, [0x1004])
 m.add_node('word',  0x1004, 2, { value: m.get_word_at(0x1004) }, [0x1008])
-m.add_node('byte', 0x1008, 1, { value: m.get_byte_at(0x1008) }, [0x1001])
-
+m.add_node('byte', 0x1008, 1, { value: m.get_byte_at(0x1008) }, [0x1000])
 
 puts(m.to_s)
-exit
 gets()
 
 m.add_node('dword', 0x1000, 4, { value: m.get_dword_at(0x1000) }, [0x2000])
