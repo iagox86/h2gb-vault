@@ -2,80 +2,75 @@
 # By Ron Bowes
 # Created October 6, 2014
 
-class MemoryNode
-  attr_reader :type, :address, :length, :details, :refs
-
-  attr_reader :raw # TODO
-
-  def initialize(type, address, length, details, refs = [])
-    @type = type
-    @address = address
-    @length = length
-    @details = details
-    @refs = refs
-
-    # TODO: Change this
-    @raw = ""
-  end
-
-  def to_s()
-    # TODO
-  end
-
-  def to_json()
-    # TODO
-  end
-end
-
-class MemoryOverlay
-  attr_accessor :node, :raw, :xrefs
-
-  def initialize(node = nil, raw = nil, xrefs = nil)
-    @node = node
-    @raw = raw || ""
-    @xrefs = xrefs || []
-  end
-end
-
-class MemorySegment
-  attr_reader :name, :real_addr, :file_addr, :data
-
-  def initialize(name, real_addr, file_addr, data)
-    @name      = name
-    @real_addr = real_addr
-    @file_addr = file_addr
-    @data      = data.split(//)
-  end
-
-  def length
-    return @data.length
-  end
-
-  def real_to_file_address(real_addr)
-    return real_addr - @real_addr + @file_addr
-  end
-
-  def to_s()
-    return "Segment: %s (0x%08x - 0x%08x)" % [@name, @real_addr, @real_addr + length()]
-  end
-
-  def to_json()
-    # TODO
-  end
-
-  def each_addr()
-    @real_addr.upto(@real_addr + length() - 1) do |addr|
-      yield(addr)
-    end
-  end
-end
-
 class Memory
   class SegmentNotFoundException < StandardError
   end
   class SegmentationException < StandardError
   end
   class OverlappingSegmentException < StandardError
+  end
+
+  class MemoryNode
+    attr_reader :type, :address, :length, :details, :refs
+
+    def initialize(type, address, length, details, refs = [])
+      @type = type
+      @address = address
+      @length = length
+      @details = details
+      @refs = refs
+    end
+
+    def to_s()
+      # TODO
+    end
+
+    def to_json()
+      # TODO
+    end
+  end
+
+  class MemoryOverlay
+    attr_accessor :node, :raw, :xrefs
+
+    def initialize(node = nil, raw = nil, xrefs = nil)
+      @node = node
+      @raw = raw || ""
+      @xrefs = xrefs || []
+    end
+  end
+
+  class MemorySegment
+    attr_reader :name, :real_addr, :file_addr, :data
+
+    def initialize(name, real_addr, file_addr, data)
+      @name      = name
+      @real_addr = real_addr
+      @file_addr = file_addr
+      @data      = data.split(//)
+    end
+
+    def length
+      return @data.length
+    end
+
+    def real_to_file_address(real_addr)
+      return real_addr - @real_addr + @file_addr
+    end
+
+    def to_s()
+      return "Segment: %s (0x%08x - 0x%08x)" % [@name, @real_addr, @real_addr + length()]
+    end
+
+    def to_json()
+      # TODO
+    end
+
+    def each_addr()
+      @real_addr.upto(@real_addr + length() - 1) do |addr|
+        yield(addr)
+      end
+    end
   end
 
   def initialize()
@@ -153,7 +148,9 @@ class Memory
     return add_node_internal(node, rewindable)
   end
 
-  def mount_segment(segment)
+  def mount_segment(name, real_addr, file_addr, data)
+    segment = MemorySegment.new(name, real_addr, file_addr, data)
+
     # Make sure the memory isn't already in use
     memory = @memory[segment.real_addr, segment.length]
     if(!(memory.nil? || memory.compact().length() == 0))
@@ -334,8 +331,8 @@ end
 
 m = Memory.new()
 
-m.mount_segment(MemorySegment.new("s1", 0x1000, 0x0000, "ABCDEFGHIJKLMNOP"))
-m.mount_segment(MemorySegment.new("s2", 0x2000, 0x0000, "abcdefghijklmnop"))
+m.mount_segment("s1", 0x1000, 0x0000, "ABCDEFGHIJKLMNOP")
+m.mount_segment("s2", 0x2000, 0x0000, "abcdefghijklmnop")
 
 m.add_node('dword', 0x1000, 4, { value: m.get_dword_at(0x1000) }, [0x1004])
 m.add_node('word',  0x1004, 2, { value: m.get_word_at(0x1004) }, [0x1008])
