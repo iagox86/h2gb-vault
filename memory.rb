@@ -117,14 +117,14 @@ end
 
 class Memory
   def initialize()
+    # Segment info
+    @segments = {}
+
     # The byte-by-byte memory
     @memory   = []
 
     # The metadata about memory
     @overlay  = []
-
-    # Segment info
-    @segments = {}
 
     # Real undo stuff
     @deltas = []
@@ -260,30 +260,6 @@ class Memory
     end
   end
 
-  def to_s()
-    s = ""
-
-    @segments.each do |segment|
-      s += segment.to_s + "\n"
-    end
-
-    each_node do |addr, overlay|
-      s += "0x%08x %s %s" % [addr, overlay.raw.unpack("H*").pop, overlay.node.to_s]
-
-      refs = overlay.node.refs
-      if(!refs.nil? && refs.length > 0)
-        s += " REFS: " + (refs.map do |ref| '0x%08x' % ref; end).join(', ')
-      end
-
-      if(overlay.xrefs.length > 0)
-        s += " XREFS: " + (overlay.xrefs.map do |ref| '0x%08x' % ref; end).join(', ')
-      end
-      s += "\n"
-    end
-
-    return s
-  end
-
   def get_bytes_at(addr, length)
     return (@memory[addr, length].map do |c| c.chr end).join
   end
@@ -345,6 +321,29 @@ class Memory
     return do_delta_internal(delta)
   end
 
+  def to_s()
+    s = ""
+
+    @segments.each do |segment|
+      s += segment.to_s + "\n"
+    end
+
+    each_node do |addr, overlay|
+      s += "0x%08x %s %s" % [addr, overlay.raw.unpack("H*").pop, overlay.node.to_s]
+
+      refs = overlay.node.refs
+      if(!refs.nil? && refs.length > 0)
+        s += " REFS: " + (refs.map do |ref| '0x%08x' % ref; end).join(', ')
+      end
+
+      if(overlay.xrefs.length > 0)
+        s += " XREFS: " + (overlay.xrefs.map do |ref| '0x%08x' % ref; end).join(', ')
+      end
+      s += "\n"
+    end
+
+    return s
+  end
 end
 
 m = Memory.new()
