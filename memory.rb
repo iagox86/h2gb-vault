@@ -5,11 +5,7 @@
 require 'json'
 
 class Memory
-  class SegmentNotFoundException < StandardError
-  end
   class SegmentationException < StandardError
-  end
-  class OverlappingSegmentException < StandardError
   end
 
   class MemoryNode
@@ -84,6 +80,21 @@ class Memory
 
     # Undo info
     @actions  = []
+    @action_index = 0
+  end
+
+  def add_action(type, details)
+    action = {
+      :type => type,
+      :details => details
+    }
+
+    @actions[@action_index] = action
+    @action_index += 1
+
+    if(!@actions[@action_index].nil?)
+      @actions = @actions[0, @action_index - 1]
+    end
   end
 
   def remove_node(node, rewindable = true)
@@ -102,7 +113,7 @@ class Memory
     end
 
     if(rewindable)
-      @actions << { :type => :remove, :node => node }
+      add_action(:remove_node, node)
     end
   end
 
@@ -137,7 +148,7 @@ class Memory
     end
 
     if(rewindable)
-      @actions << { :type => :add, :node => node }
+      add_action(:add_node, node)
     end
   end
 
@@ -147,13 +158,11 @@ class Memory
     return add_node_internal(node, rewindable)
   end
 
-  def mount_segment(name, real_addr, file_addr, data)
-    segment = MemorySegment.new(name, real_addr, file_addr, data)
-
+  def create_segment_internal(segment, rewindable = true)
     # Make sure the memory isn't already in use
     memory = @memory[segment.real_addr, segment.length]
     if(!(memory.nil? || memory.compact().length() == 0))
-      raise OverlappingSegmentException
+      raise(SegmentationException, "Tried to mount overlapping segments!")
     end
 
     # Keep track of the mount so we can unmount later
@@ -166,13 +175,21 @@ class Memory
     segment.each_addr do |addr|
       @overlay[addr] = MemoryOverlay.new(addr, nil)
     end
+
+    if(rewindable)
+      add_action(:create_segment, segment)
+    end
   end
 
-  def unmount_segment(name)
+  def create_segment(name, real_addr, file_addr, data, rewindable = true)
+    create_segment_internal(MemorySegment.new(name, real_addr, file_addr, data))
+  end
+
+  def delete_segment(name, rewindable = true)
     # Clear the memory for the segment
-    segment = @segments['name']
+    segment = @segments[name]
     if(segment.nil?)
-      raise SegmentNotFoundException
+      raise(SegmentationException, "Tried to unmount a segment that doesn't seem to be mounted")
     end
 
     # Undefine its entire space
@@ -189,6 +206,10 @@ class Memory
 
     # Delete it from the segments table
     @segments.delete(name)
+
+    if(rewindable)
+      add_action(:delete_segment, segment)
+    end
   end
 
   def get_overlay_at(addr)
@@ -279,46 +300,18 @@ class Memory
     return get_bytes_at(addr, 1).ord
   end
 
-  def get_nodes()
-    return ['todo']
-#    nodes = []
-#
-#    each_node do |addr, node|
-#      if(node.nil?)
-#        nodes << {
-#          :type    => 'undefined',
-#          :address => addr,
-#          :length  => 1,
-#          :details => {},
-#          :refs    => [],
-#          :xrefs   => @memory_xrefs[addr],
-#        }
-#      else
-#        nodes << {
-#          :type    => node.type,
-#          :address => node.address,
-#          :length  => node.length,
-#          :details => node.details,
-#          :refs    => node.refs,
-#
-#          # TODO
-#          :file_address => "TODO",
-#          :xrefs        => get_xrefs_to_node(node),
-#        }
-#      end
-#    end
-#
-#    return nodes
-  end
-
   def rewind(steps = 1)
     0.upto(steps - 1) do
       action = @actions.pop
 
-      if(action[:type] == :add)
-        remove_node(action[:node], false)
-      elsif(action[:type] == :remove)
-        add_node_internal(action[:node], false)
+      if(action[:type] == :add_node)
+        remove_node(action[:details], false)
+      elsif(action[:type] == :remove_node)
+        add_node_internal(action[:details], false)
+      elsif(action[:type] == :delete_segment)
+        create_segment_internal(action[:details], false)
+      elsif(action[:type] == :create_segment)
+        delete_segment(action[:details].name, false)
       else
         puts("Unknown action: #{action[:type]}")
         raise NotImplementedException
@@ -330,8 +323,8 @@ end
 
 m = Memory.new()
 
-m.mount_segment("s1", 0x1000, 0x0000, "ABCDEFGHIJKLMNOP")
-m.mount_segment("s2", 0x2000, 0x0000, "abcdefghijklmnop")
+m.create_segment("s1", 0x1000, 0x0000, "ABCDEFGHIJKLMNOP")
+m.create_segment("s2", 0x2000, 0x0000, "abcdefghijklmnop")
 
 m.add_node('dword', 0x1000, 4, { value: m.get_dword_at(0x1000) }, [0x1004])
 m.add_node('word',  0x1004, 2, { value: m.get_word_at(0x1004) }, [0x1008])
