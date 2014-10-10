@@ -13,19 +13,11 @@ class CreateTables < ActiveRecord::Migration
       t.timestamps()
     end
 
-    create_table(:projects) do |t|
+    create_table(:memory_deltas) do |t|
       t.belongs_to(:binary)
 
-      # Serialized Hash
-      t.text(:view)
-
-      t.timestamps()
-    end
-
-    create_table(:deltas) do |t|
-      t.belongs_to(:project)
-
-      t.text(:deltas)
+      t.string(:type)
+      t.text(:details)
 
       t.timestamps()
     end
@@ -34,6 +26,6 @@ class CreateTables < ActiveRecord::Migration
   def down()
     drop_table :binaries
     drop_table :projects
-    drop_table :deltas
+    drop_table :memory_deltas
   end
 end

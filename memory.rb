@@ -3,71 +3,128 @@
 # Created October 6, 2014
 
 require 'json'
+require 'sinatra/activerecord'
+
+class SegmentationException < StandardError
+end
+
+class MemoryDelta#< ActiveRecord::Base
+  attr_reader :type, :details
+
+  private
+  def initialize(type, details = nil)
+    @type    = type
+    @details = details
+  end
+
+  public
+  def MemoryDelta.create_checkpoint()
+    return MemoryDelta.new(:checkpoint)
+  end
+
+  def MemoryDelta.create_node(node)
+    return MemoryDelta.new(:create_node, node)
+  end
+
+  def MemoryDelta.delete_node(node)
+    return MemoryDelta.new(:delete_node, node)
+  end
+
+  def MemoryDelta.create_segment(segment)
+    return MemoryDelta.new(:create_segment, segment)
+  end
+
+  def MemoryDelta.delete_segment(segment)
+    return MemoryDelta.new(:delete_segment, segment)
+  end
+
+  def invert()
+    if(@type == :checkpoint)
+      return MemoryDelta.create_checkpoint()
+    elsif(@type == :create_node)
+      return MemoryDelta.delete_node(@details)
+    elsif(@type == :delete_node)
+      return MemoryDelta.create_node(@details)
+    elsif(@type == :create_segment)
+      return MemoryDelta.delete_segment(@details)
+    elsif(@type == :delete_segment)
+      return MemoryDelta.create_segment(@details)
+    else
+      raise(SegmentationException, "Unknown action: #{@type}")
+    end
+  end
+
+  def to_s()
+    if(@type == :checkpoint)
+      return '--'
+    else
+      return "%s %s" % [@type, @details.to_s]
+    end
+  end
+end
+
+class MemoryNode
+  attr_reader :type, :address, :length, :details, :refs
+
+  def initialize(type, address, length, details, refs = [])
+    @type = type
+    @address = address
+    @length = length
+    @details = details
+    @refs = refs
+  end
+
+  def to_s()
+    return "0x%08x %s 0x%08x" % [@address, @type, @details[:value] == "undefined" ? 0 : @details[:value]]
+  end
+
+  def to_json()
+    # TODO
+  end
+end
+
+class MemoryOverlay
+  attr_accessor :address, :node, :raw, :xrefs
+
+  def initialize(address, node = nil, raw = nil, xrefs = nil)
+    @address = address
+    @node = node
+    @raw = raw || ""
+    @xrefs = xrefs || []
+  end
+end
+
+class MemorySegment
+  attr_reader :name, :real_addr, :file_addr, :data
+
+  def initialize(name, real_addr, file_addr, data)
+    @name      = name
+    @real_addr = real_addr
+    @file_addr = file_addr
+    @data      = data.split(//)
+  end
+
+  def length
+    return @data.length
+  end
+
+  def to_s()
+    return "Segment: %s (0x%08x - 0x%08x)" % [@name, @real_addr, @real_addr + length()]
+  end
+
+  def to_json()
+
+  end
+
+  def each_addr()
+    @real_addr.upto(@real_addr + length() - 1) do |addr|
+      yield(addr)
+    end
+  end
+end
+
 
 class Memory
-  class SegmentationException < StandardError
-  end
-
-  class MemoryNode
-    attr_reader :type, :address, :length, :details, :refs
-
-    def initialize(type, address, length, details, refs = [])
-      @type = type
-      @address = address
-      @length = length
-      @details = details
-      @refs = refs
-    end
-
-    def to_s()
-      return "%s %s" % [@type, @details]
-    end
-
-    def to_json()
-      # TODO
-    end
-  end
-
-  class MemoryOverlay
-    attr_accessor :address, :node, :raw, :xrefs
-
-    def initialize(address, node = nil, raw = nil, xrefs = nil)
-      @address = address
-      @node = node
-      @raw = raw || ""
-      @xrefs = xrefs || []
-    end
-  end
-
-  class MemorySegment
-    attr_reader :name, :real_addr, :file_addr, :data
-
-    def initialize(name, real_addr, file_addr, data)
-      @name      = name
-      @real_addr = real_addr
-      @file_addr = file_addr
-      @data      = data.split(//)
-    end
-
-    def length
-      return @data.length
-    end
-
-    def to_s()
-      return "Segment: %s (0x%08x - 0x%08x)" % [@name, @real_addr, @real_addr + length()]
-    end
-
-    def to_json()
-
-    end
-
-    def each_addr()
-      @real_addr.upto(@real_addr + length() - 1) do |addr|
-        yield(addr)
-      end
-    end
-  end
-
   def initialize()
     # The byte-by-byte memory
     @memory   = []
@@ -81,6 +138,9 @@ class Memory
     # Undo info
     @actions  = []
     @action_index = 0
+
+    # Real undo stuff
+    @deltas = []
   end
 
   def add_action(type, details)
@@ -97,7 +157,7 @@ class Memory
     end
   end
 
-  def remove_node(node, rewindable = true)
+  def remove_node(node)
     # Remove the node from the overlay
     node.address.upto(node.address + node.length - 1) do |addr|
       @overlay[addr].node = nil
@@ -111,21 +171,17 @@ class Memory
         xrefs.delete(node.address)
       end
     end
-
-    if(rewindable)
-      add_action(:remove_node, node)
-    end
   end
 
   def undefine(addr, len)
     addr.upto(addr + len - 1) do |a|
       if(!@overlay[a].node.nil?)
-        remove_node(@overlay[a].node)
+        do_delta_internal(MemoryDelta.delete_node(@overlay[a].node))
       end
     end
   end
 
-  def add_node_internal(node, rewindable = true)
+  def add_node(node)
     # Make sure there's enough room for the entire node
     node.address.upto(node.address + node.length - 1) do |addr|
       # There's no memory
@@ -146,19 +202,9 @@ class Memory
       # Record the cross reference
       @overlay[ref].xrefs << node.address
     end
-
-    if(rewindable)
-      add_action(:add_node, node)
-    end
   end
 
-  def add_node(type, address, length, details, refs = [], rewindable = true)
-    node = MemoryNode.new(type, address, length, details, refs)
-
-    return add_node_internal(node, rewindable)
-  end
-
-  def create_segment_internal(segment, rewindable = true)
+  def create_segment(segment)
     # Make sure the memory isn't already in use
     memory = @memory[segment.real_addr, segment.length]
     if(!(memory.nil? || memory.compact().length() == 0))
@@ -175,23 +221,9 @@ class Memory
     segment.each_addr do |addr|
       @overlay[addr] = MemoryOverlay.new(addr, nil)
     end
-
-    if(rewindable)
-      add_action(:create_segment, segment)
-    end
   end
 
-  def create_segment(name, real_addr, file_addr, data, rewindable = true)
-    create_segment_internal(MemorySegment.new(name, real_addr, file_addr, data))
-  end
-
-  def delete_segment(name, rewindable = true)
-    # Clear the memory for the segment
-    segment = @segments[name]
-    if(segment.nil?)
-      raise(SegmentationException, "Tried to unmount a segment that doesn't seem to be mounted")
-    end
-
+  def delete_segment(segment)
     # Undefine its entire space
     undefine(segment.real_addr, segment.length - 1)
 
@@ -199,17 +231,12 @@ class Memory
     @memory[segment.real_addr, segment.length] = [nil] * segment.length
 
     # Get rid of the overlays
-    # TODO: Use a segment.each_addr() thing
     segment.each_addr do |addr|
       @overlay[addr] = nil
     end
 
     # Delete it from the segments table
-    @segments.delete(name)
-
-    if(rewindable)
-      add_action(:delete_segment, segment)
-    end
+    @segments.delete(segment.name)
   end
 
   def get_overlay_at(addr)
@@ -300,49 +327,75 @@ class Memory
     return get_bytes_at(addr, 1).ord
   end
 
-  def rewind(steps = 1)
-    0.upto(steps - 1) do
-      action = @actions.pop
+  def undo()
+    loop do
+      d = @deltas.pop()
 
-      if(action[:type] == :add_node)
-        remove_node(action[:details], false)
-      elsif(action[:type] == :remove_node)
-        add_node_internal(action[:details], false)
-      elsif(action[:type] == :delete_segment)
-        create_segment_internal(action[:details], false)
-      elsif(action[:type] == :create_segment)
-        delete_segment(action[:details].name, false)
-      else
-        puts("Unknown action: #{action[:type]}")
-        raise NotImplementedException
+      if(d.nil?)
+        break
       end
+
+      if(d.type == :checkpoint)
+        break
+      end
+
+      do_delta_internal(d.invert, false)
     end
+  end
+
+  def do_delta_internal(delta, rewindable = true)
+    case delta.type
+    when :create_node
+      add_node(delta.details)
+    when :delete_node
+      remove_node(delta.details)
+    when :create_segment
+      create_segment(delta.details)
+    when :delete_segment
+      delete_segment(delta.details)
+    else
+      raise(SegmentationException, "Unknown delta: #{delta}")
+    end
+
+    # Record this action
+    # Note: this has to be after the action, otherwise the undo history winds
+    # up in the wrong order when actions recurse
+    if(rewindable)
+      @deltas << delta
+    end
+  end
+
+  def do_delta(delta)
+    # Record a checkpoint for 'undo' purposes
+    @deltas << MemoryDelta.create_checkpoint()
+
+    return do_delta_internal(delta)
   end
 
 end
 
 m = Memory.new()
 
-m.create_segment("s1", 0x1000, 0x0000, "ABCDEFGHIJKLMNOP")
-m.create_segment("s2", 0x2000, 0x0000, "abcdefghijklmnop")
+m.do_delta(MemoryDelta.create_segment(MemorySegment.new("s1", 0x1000, 0x0000, "ABCDEFGHIJKLMNOP")))
+m.do_delta(MemoryDelta.create_segment(MemorySegment.new("s2", 0x2000, 0x0000, "abcdefghijklmnop")))
 
-m.add_node('dword', 0x1000, 4, { value: m.get_dword_at(0x1000) }, [0x1004])
-m.add_node('word',  0x1004, 2, { value: m.get_word_at(0x1004) }, [0x1008])
-m.add_node('byte', 0x1008, 1, { value: m.get_byte_at(0x1008) }, [0x1000])
+m.do_delta(MemoryDelta.create_node(MemoryNode.new('dword', 0x1000, 4, { value: 0x41414141 }, [0x1004])))
+m.do_delta(MemoryDelta.create_node(MemoryNode.new('dword', 0x1004, 4, { value: 0x41414141 }, [0x1008])))
+m.do_delta(MemoryDelta.create_node(MemoryNode.new('dword', 0x1008, 4, { value: 0x41414141 }, [0x100c])))
 
 puts(m.to_s)
 gets()
 
-m.add_node('dword', 0x1000, 4, { value: m.get_dword_at(0x1000) }, [0x2000])
-m.add_node('word',  0x1004, 4, { value: m.get_dword_at(0x1004) }, [0x2004])
-m.add_node('byte',  0x1008, 4, { value: m.get_dword_at(0x1008) }, [0x2008])
+m.do_delta(MemoryDelta.create_node(MemoryNode.new('dword', 0x1000, 4, { value: 0x42424242 }, [0x1004])))
+m.do_delta(MemoryDelta.create_node(MemoryNode.new('word',  0x1004, 2, { value: 0x4242 }, [0x1008])))
+m.do_delta(MemoryDelta.create_node(MemoryNode.new('byte',  0x1008, 1, { value: 0x42 }, [0x100c])))
 
 puts(m.to_s)
 gets()
 
 while true do
-  gets()
-  m.rewind(1)
+  m.undo()
   puts(m.to_s)
+  gets()
 end
 
