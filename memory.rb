@@ -77,10 +77,6 @@ class MemoryNode
   def to_s()
     return "0x%08x %s 0x%08x" % [@address, @type, @details[:value] == "undefined" ? 0 : @details[:value]]
   end
-
-  def to_json()
-    # TODO
-  end
 end
 
 class MemoryOverlay
@@ -112,17 +108,12 @@ class MemorySegment
     return "Segment: %s (0x%08x - 0x%08x)" % [@name, @real_addr, @real_addr + length()]
   end
 
-  def to_json()
-
-  end
-
   def each_addr()
     @real_addr.upto(@real_addr + length() - 1) do |addr|
       yield(addr)
     end
   end
 end
-
 
 class Memory
   def initialize()
@@ -135,26 +126,8 @@ class Memory
     # Segment info
     @segments = {}
 
-    # Undo info
-    @actions  = []
-    @action_index = 0
-
     # Real undo stuff
     @deltas = []
-  end
-
-  def add_action(type, details)
-    action = {
-      :type => type,
-      :details => details
-    }
-
-    @actions[@action_index] = action
-    @action_index += 1
-
-    if(!@actions[@action_index].nil?)
-      @actions = @actions[0, @action_index - 1]
-    end
   end
 
   def remove_node(node)
