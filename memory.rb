@@ -2,6 +2,8 @@
 # By Ron Bowes
 # Created October 6, 2014
 
+require 'json'
+
 class Memory
   class SegmentNotFoundException < StandardError
   end
@@ -22,7 +24,7 @@ class Memory
     end
 
     def to_s()
-      # TODO
+      return "%s %s" % [@type, @details]
     end
 
     def to_json()
@@ -31,9 +33,10 @@ class Memory
   end
 
   class MemoryOverlay
-    attr_accessor :node, :raw, :xrefs
+    attr_accessor :address, :node, :raw, :xrefs
 
-    def initialize(node = nil, raw = nil, xrefs = nil)
+    def initialize(address, node = nil, raw = nil, xrefs = nil)
+      @address = address
       @node = node
       @raw = raw || ""
       @xrefs = xrefs || []
@@ -54,16 +57,12 @@ class Memory
       return @data.length
     end
 
-    def real_to_file_address(real_addr)
-      return real_addr - @real_addr + @file_addr
-    end
-
     def to_s()
       return "Segment: %s (0x%08x - 0x%08x)" % [@name, @real_addr, @real_addr + length()]
     end
 
     def to_json()
-      # TODO
+
     end
 
     def each_addr()
@@ -165,7 +164,7 @@ class Memory
 
     # Create some empty overlays
     segment.each_addr do |addr|
-      @overlay[addr] = MemoryOverlay.new(nil)
+      @overlay[addr] = MemoryOverlay.new(addr, nil)
     end
   end
 
@@ -184,7 +183,7 @@ class Memory
 
     # Get rid of the overlays
     # TODO: Use a segment.each_addr() thing
-    segment.real_addr.upto(segment.real_addr + segment.length - 1) do |addr|
+    segment.each_addr do |addr|
       @overlay[addr] = nil
     end
 
@@ -248,7 +247,7 @@ class Memory
     end
 
     each_node do |addr, overlay|
-      s += "0x%08x %s %s %s" % [addr, overlay.raw.unpack("H*").pop, overlay.node.type, overlay.node.details]
+      s += "0x%08x %s %s" % [addr, overlay.raw.unpack("H*").pop, overlay.node.to_s]
 
       refs = overlay.node.refs
       if(!refs.nil? && refs.length > 0)
