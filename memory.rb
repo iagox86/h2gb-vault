@@ -5,7 +5,7 @@
 require 'json'
 require 'sinatra/activerecord'
 
-class SegmentationException < StandardError
+class MemoryException < StandardError
 end
 
 class MemoryDelta#< ActiveRecord::Base
@@ -50,7 +50,7 @@ class MemoryDelta#< ActiveRecord::Base
     elsif(@type == :delete_segment)
       return MemoryDelta.create_segment(@details)
     else
-      raise(SegmentationException, "Unknown action: #{@type}")
+      raise(MemoryException, "Unknown action: #{@type}")
     end
   end
 
@@ -159,7 +159,7 @@ class Memory
     node.address.upto(node.address + node.length - 1) do |addr|
       # There's no memory
       if(@memory[addr].nil?)
-        raise SegmentationException
+        raise MemoryException
       end
     end
 
@@ -181,7 +181,7 @@ class Memory
     # Make sure the memory isn't already in use
     memory = @memory[segment.real_addr, segment.length]
     if(!(memory.nil? || memory.compact().length() == 0))
-      raise(SegmentationException, "Tried to mount overlapping segments!")
+      raise(MemoryException, "Tried to mount overlapping segments!")
     end
 
     # Keep track of the mount so we can unmount later
@@ -303,7 +303,7 @@ class Memory
     when :delete_segment
       delete_segment(delta.details)
     else
-      raise(SegmentationException, "Unknown delta: #{delta}")
+      raise(MemoryException, "Unknown delta: #{delta}")
     end
 
     # Record this action
