@@ -53,7 +53,6 @@ class Memory
     # Make sure there's enough room for the entire node
     node[:address].upto(node[:address] + node[:length] - 1) do |addr|
       # There's no memory
-puts("addr = 0x%x" % addr)
       if(@memory[addr].nil?)
         raise(MemoryException, "Tried to create a node where no memory is mounted")
       end
