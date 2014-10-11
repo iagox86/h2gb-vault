@@ -63,22 +63,6 @@ class MemoryDelta#< ActiveRecord::Base
   end
 end
 
-class MemoryNode
-  attr_reader :type, :address, :length, :details, :refs
-
-  def initialize(type, address, length, details, refs = [])
-    @type = type
-    @address = address
-    @length = length
-    @details = details
-    @refs = refs
-  end
-
-  def to_s()
-    return "0x%08x %s 0x%08x" % [@address, @type, @details[:value] == "undefined" ? 0 : @details[:value]]
-  end
-end
-
 class MemoryOverlay
   attr_accessor :address, :node, :raw, :xrefs
 
@@ -132,16 +116,16 @@ class Memory
 
   def remove_node(node)
     # Remove the node from the overlay
-    node.address.upto(node.address + node.length - 1) do |addr|
+    node[:address].upto(node[:address] + node[:length] - 1) do |addr|
       @overlay[addr].node = nil
     end
 
     # Go through its references, and remove xrefs as necessary
-    node.refs.each do |ref|
+    node[:refs].each do |ref|
       xrefs = @overlay[ref].xrefs
       # It shouldn't ever be nil, but...
       if(!xrefs.nil?)
-        xrefs.delete(node.address)
+        xrefs.delete(node[:address])
       end
     end
   end
@@ -156,7 +140,7 @@ class Memory
 
   def add_node(node)
     # Make sure there's enough room for the entire node
-    node.address.upto(node.address + node.length - 1) do |addr|
+    node[:address].upto(node[:address] + node[:length] - 1) do |addr|
       # There's no memory
       if(@memory[addr].nil?)
         raise MemoryException
@@ -164,16 +148,16 @@ class Memory
     end
 
     # Make sure the nodes are undefined
-    undefine(node.address, node.length)
+    undefine(node[:address], node[:length])
 
     # Save the node to memory
-    node.address.upto(node.address + node.length - 1) do |addr|
+    node[:address].upto(node[:address] + node[:length] - 1) do |addr|
       @overlay[addr].node = node
     end
 
-    node.refs.each do |ref|
+    node[:refs].each do |ref|
       # Record the cross reference
-      @overlay[ref].xrefs << node.address
+      @overlay[ref].xrefs << node[:address]
     end
   end
 
@@ -232,13 +216,13 @@ class Memory
 
     # If we aren't somewhere with an actual node, make a fake one
     if(overlay.node.nil?)
-      result.node = MemoryNode.new("undefined", addr, 1, { :value => "undefined" })
+      result.node = { :type => "undefined", :address => addr, :length => 1, :details => { :value => "undefined" }}
     else
       result.node = overlay.node.clone
     end
 
     # Add extra fields that we magically have
-    result.raw = get_bytes_at(addr, result.node.length)
+    result.raw = get_bytes_at(addr, result.node[:length])
 
     # And that's it!
     return result
@@ -255,7 +239,7 @@ class Memory
         i += 1
       else
         yield i, overlay
-        i += overlay.node.length
+        i += overlay.node[:length]
       end
     end
   end
@@ -331,7 +315,7 @@ class Memory
     each_node do |addr, overlay|
       s += "0x%08x %s %s" % [addr, overlay.raw.unpack("H*").pop, overlay.node.to_s]
 
-      refs = overlay.node.refs
+      refs = overlay.node[:refs]
       if(!refs.nil? && refs.length > 0)
         s += " REFS: " + (refs.map do |ref| '0x%08x' % ref; end).join(', ')
       end
@@ -351,16 +335,16 @@ m = Memory.new()
 m.do_delta(MemoryDelta.create_segment(MemorySegment.new("s1", 0x1000, 0x0000, "ABCDEFGHIJKLMNOP")))
 m.do_delta(MemoryDelta.create_segment(MemorySegment.new("s2", 0x2000, 0x0000, "abcdefghijklmnop")))
 
-m.do_delta(MemoryDelta.create_node(MemoryNode.new('dword', 0x1000, 4, { value: 0x41414141 }, [0x1004])))
-m.do_delta(MemoryDelta.create_node(MemoryNode.new('dword', 0x1004, 4, { value: 0x41414141 }, [0x1008])))
-m.do_delta(MemoryDelta.create_node(MemoryNode.new('dword', 0x1008, 4, { value: 0x41414141 }, [0x100c])))
+m.do_delta(MemoryDelta.create_node({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1004]}))
+m.do_delta(MemoryDelta.create_node({ :type => 'dword', :address => 0x1004, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1008]}))
+m.do_delta(MemoryDelta.create_node({ :type => 'dword', :address => 0x1008, :length => 4, :details => { value: 0x41414141 }, :refs => [0x100c]}))
 
 puts(m.to_s)
 gets()
 
-m.do_delta(MemoryDelta.create_node(MemoryNode.new('dword', 0x1000, 4, { value: 0x42424242 }, [0x1004])))
-m.do_delta(MemoryDelta.create_node(MemoryNode.new('word',  0x1004, 2, { value: 0x4242 }, [0x1008])))
-m.do_delta(MemoryDelta.create_node(MemoryNode.new('byte',  0x1008, 1, { value: 0x42 }, [0x100c])))
+m.do_delta(MemoryDelta.create_node({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x42424242 }, :refs => [0x1004]}))
+m.do_delta(MemoryDelta.create_node({ :type => 'word' , :address => 0x1004, :length => 2, :details => { value: 0x4242 },     :refs => [0x1008]}))
+m.do_delta(MemoryDelta.create_node({ :type => 'byte' , :address => 0x1008, :length => 1, :details => { value: 0x42 },       :refs => [0x100c]}))
 
 puts(m.to_s)
 gets()
