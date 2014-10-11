@@ -121,11 +121,13 @@ class Memory
     end
 
     # Go through its references, and remove xrefs as necessary
-    node[:refs].each do |ref|
-      xrefs = @overlay[ref].xrefs
-      # It shouldn't ever be nil, but...
-      if(!xrefs.nil?)
-        xrefs.delete(node[:address])
+    if(!node[:refs].nil?)
+      node[:refs].each do |ref|
+        xrefs = @overlay[ref].xrefs
+        # It shouldn't ever be nil, but...
+        if(!xrefs.nil?)
+          xrefs.delete(node[:address])
+        end
       end
     end
   end
@@ -155,9 +157,11 @@ class Memory
       @overlay[addr].node = node
     end
 
-    node[:refs].each do |ref|
-      # Record the cross reference
-      @overlay[ref].xrefs << node[:address]
+    if(!node[:refs].nil?)
+      node[:refs].each do |ref|
+        # Record the cross reference
+        @overlay[ref].xrefs << node[:address]
+      end
     end
   end
 
@@ -343,8 +347,8 @@ puts(m.to_s)
 gets()
 
 m.do_delta(MemoryDelta.create_node({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x42424242 }, :refs => [0x1004]}))
-m.do_delta(MemoryDelta.create_node({ :type => 'word' , :address => 0x1004, :length => 2, :details => { value: 0x4242 },     :refs => [0x1008]}))
-m.do_delta(MemoryDelta.create_node({ :type => 'byte' , :address => 0x1008, :length => 1, :details => { value: 0x42 },       :refs => [0x100c]}))
+m.do_delta(MemoryDelta.create_node({ :type => 'word' , :address => 0x1004, :length => 2, :details => { value: 0x4242 } }))
+m.do_delta(MemoryDelta.create_node({ :type => 'byte' , :address => 0x1008, :length => 1, :details => { value: 0x42 } }))
 
 puts(m.to_s)
 gets()
