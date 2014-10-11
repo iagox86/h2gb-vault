@@ -8,61 +8,6 @@ require 'json'
 class MemoryException < StandardError
 end
 
-class MemoryDelta#< ActiveRecord::Base
-  attr_reader :type, :details
-
-  private
-  def initialize(type, details = nil)
-    @type    = type
-    @details = details
-  end
-
-  public
-  def MemoryDelta.create_checkpoint()
-    return MemoryDelta.new(:checkpoint)
-  end
-
-  def MemoryDelta.create_node(node)
-    return MemoryDelta.new(:create_node, node)
-  end
-
-  def MemoryDelta.delete_node(node)
-    return MemoryDelta.new(:delete_node, node)
-  end
-
-  def MemoryDelta.create_segment(segment)
-    return MemoryDelta.new(:create_segment, segment)
-  end
-
-  def MemoryDelta.delete_segment(segment)
-    return MemoryDelta.new(:delete_segment, segment)
-  end
-
-  def invert()
-    if(@type == :checkpoint)
-      return MemoryDelta.create_checkpoint()
-    elsif(@type == :create_node)
-      return MemoryDelta.delete_node(@details)
-    elsif(@type == :delete_node)
-      return MemoryDelta.create_node(@details)
-    elsif(@type == :create_segment)
-      return MemoryDelta.delete_segment(@details)
-    elsif(@type == :delete_segment)
-      return MemoryDelta.create_segment(@details)
-    else
-      raise(MemoryException, "Unknown action: #{@type}")
-    end
-  end
-
-  def to_s()
-    if(@type == :checkpoint)
-      return '--'
-    else
-      return "%s %s" % [@type, @details.to_s]
-    end
-  end
-end
-
 class MemoryOverlay
   attr_accessor :address, :node, :raw, :xrefs
 
@@ -110,7 +55,7 @@ class Memory
   def undefine(addr, len)
     addr.upto(addr + len - 1) do |a|
       if(!@overlay[a].node.nil?)
-        do_delta_internal(MemoryDelta.delete_node(@overlay[a].node))
+        do_delta_internal(Memory.delete_node_delta(@overlay[a].node))
       end
     end
   end
@@ -257,24 +202,24 @@ puts("addr = 0x%x" % addr)
         break
       end
 
-      if(d.type == :checkpoint)
+      if(d[:type] == :checkpoint)
         break
       end
 
-      do_delta_internal(d.invert, false)
+      do_delta_internal(Memory.invert_delta(d), false)
     end
   end
 
   def do_delta_internal(delta, rewindable = true)
-    case delta.type
+    case delta[:type]
     when :create_node
-      add_node(delta.details)
+      add_node(delta[:details])
     when :delete_node
-      remove_node(delta.details)
+      remove_node(delta[:details])
     when :create_segment
-      create_segment(delta.details)
+      create_segment(delta[:details])
     when :delete_segment
-      delete_segment(delta.details)
+      delete_segment(delta[:details])
     else
       raise(MemoryException, "Unknown delta: #{delta}")
     end
@@ -289,9 +234,45 @@ puts("addr = 0x%x" % addr)
 
   def do_delta(delta)
     # Record a checkpoint for 'undo' purposes
-    @deltas << MemoryDelta.create_checkpoint()
+    @deltas << Memory.create_checkpoint_delta()
 
     return do_delta_internal(delta)
+  end
+
+  def Memory.create_checkpoint_delta()
+    return { :type => :checkpoint }
+  end
+
+  def Memory.create_node_delta(node)
+    return { :type => :create_node, :details => node }
+  end
+
+  def Memory.delete_node_delta(node)
+    return { :type => :delete_node, :details => node }
+  end
+
+  def Memory.create_segment_delta(segment)
+    return { :type => :create_segment, :details => segment }
+  end
+
+  def Memory.delete_segment_delta(segment)
+    return { :type => :delete_segment, :details => segment }
+  end
+
+  def Memory.invert_delta(delta)
+    if(delta[:type] == :checkpoint)
+      return Memory.create_checkpoint_delta()
+    elsif(delta[:type] == :create_node)
+      return Memory.delete_node_delta(delta[:details])
+    elsif(delta[:type] == :delete_node)
+      return Memory.create_node_delta(delta[:details])
+    elsif(delta[:type] == :create_segment)
+      return Memory.delete_segment_delta(delta[:details])
+    elsif(delta[:type] == :delete_segment)
+      return Memory.create_segment_delta(delta[:details])
+    else
+      raise(MemoryException, "Unknown delta type: #{delta[:type]}")
+    end
   end
 
   def to_s()
@@ -317,25 +298,26 @@ puts("addr = 0x%x" % addr)
 
     return s
   end
+
 end
 
 m = Memory.new()
 
-m.do_delta(MemoryDelta.create_segment({ :type => 'segment', :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "ABCDEFGHIJKLMNOP"}))
-m.do_delta(MemoryDelta.create_segment({ :type => 'segment', :name => "s2", :address => 0x2000, :file_address => 0x1000, :data => "abcdefghijklmnop"}))
+m.do_delta(Memory.create_segment_delta({ :type => 'segment', :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "ABCDEFGHIJKLMNOP"}))
+m.do_delta(Memory.create_segment_delta({ :type => 'segment', :name => "s2", :address => 0x2000, :file_address => 0x1000, :data => "abcdefghijklmnop"}))
 
 puts(m.to_s)
 
-m.do_delta(MemoryDelta.create_node({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1004]}))
-m.do_delta(MemoryDelta.create_node({ :type => 'dword', :address => 0x1004, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1008]}))
-m.do_delta(MemoryDelta.create_node({ :type => 'dword', :address => 0x1008, :length => 4, :details => { value: 0x41414141 }, :refs => [0x100c]}))
+m.do_delta(Memory.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1004]}))
+m.do_delta(Memory.create_node_delta({ :type => 'dword', :address => 0x1004, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1008]}))
+m.do_delta(Memory.create_node_delta({ :type => 'dword', :address => 0x1008, :length => 4, :details => { value: 0x41414141 }, :refs => [0x100c]}))
 
 puts(m.to_s)
 gets()
 
-m.do_delta(MemoryDelta.create_node({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x42424242 }, :refs => [0x1004]}))
-m.do_delta(MemoryDelta.create_node({ :type => 'word' , :address => 0x1004, :length => 2, :details => { value: 0x4242 } }))
-m.do_delta(MemoryDelta.create_node({ :type => 'byte' , :address => 0x1008, :length => 1, :details => { value: 0x42 } }))
+m.do_delta(Memory.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x42424242 }, :refs => [0x1004]}))
+m.do_delta(Memory.create_node_delta({ :type => 'word' , :address => 0x1004, :length => 2, :details => { value: 0x4242 } }))
+m.do_delta(Memory.create_node_delta({ :type => 'byte' , :address => 0x1008, :length => 1, :details => { value: 0x42 } }))
 
 puts(m.to_s)
 gets()
