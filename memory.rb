@@ -3,7 +3,7 @@
 # Created October 6, 2014
 
 require 'json'
-require 'sinatra/activerecord'
+#require 'sinatra/activerecord'
 
 class MemoryException < StandardError
 end
@@ -74,31 +74,6 @@ class MemoryOverlay
   end
 end
 
-class MemorySegment
-  attr_reader :name, :real_addr, :file_addr, :data
-
-  def initialize(name, real_addr, file_addr, data)
-    @name      = name
-    @real_addr = real_addr
-    @file_addr = file_addr
-    @data      = data.split(//)
-  end
-
-  def length
-    return @data.length
-  end
-
-  def to_s()
-    return "Segment: %s (0x%08x - 0x%08x)" % [@name, @real_addr, @real_addr + length()]
-  end
-
-  def each_addr()
-    @real_addr.upto(@real_addr + length() - 1) do |addr|
-      yield(addr)
-    end
-  end
-end
-
 class Memory
   def initialize()
     # Segment info
@@ -144,8 +119,9 @@ class Memory
     # Make sure there's enough room for the entire node
     node[:address].upto(node[:address] + node[:length] - 1) do |addr|
       # There's no memory
+puts("addr = 0x%x" % addr)
       if(@memory[addr].nil?)
-        raise MemoryException
+        raise(MemoryException, "Tried to create a node where no memory is mounted")
       end
     end
 
@@ -165,39 +141,48 @@ class Memory
     end
   end
 
+  def each_address_in_segment(segment)
+    segment[:address].upto(segment[:address] + segment[:data].length() - 1) do |addr|
+      yield(addr)
+    end
+  end
+
   def create_segment(segment)
     # Make sure the memory isn't already in use
-    memory = @memory[segment.real_addr, segment.length]
+    memory = @memory[segment[:address], segment[:data].length()]
     if(!(memory.nil? || memory.compact().length() == 0))
       raise(MemoryException, "Tried to mount overlapping segments!")
     end
 
     # Keep track of the mount so we can unmount later
-    @segments[segment.name] = segment
+    @segments[segment[:name]] = segment
 
     # Map the data into memory
-    @memory[segment.real_addr, segment.length] = segment.data
+    @memory[segment[:address], segment[:data].length()] = segment[:data].split(//)
 
     # Create some empty overlays
-    segment.each_addr do |addr|
+    each_address_in_segment(segment) do |addr|
+      puts("X:: %x" % addr)
       @overlay[addr] = MemoryOverlay.new(addr, nil)
     end
   end
 
   def delete_segment(segment)
     # Undefine its entire space
-    undefine(segment.real_addr, segment.length - 1)
+    undefine(segment[:address], segment[:data].length() - 1)
 
     # Delete the data and the overlay
-    @memory[segment.real_addr, segment.length] = [nil] * segment.length
+    @memory[segment[:address], segment[:data].length()] = [nil] * segment[:data].length()
 
     # Get rid of the overlays
-    segment.each_addr do |addr|
+    each_address_in_segment(segment) do |addr|
       @overlay[addr] = nil
     end
 
     # Delete it from the segments table
-    @segments.delete(segment.name)
+    @segments.delete(segment[:name])
+
+    # TODO: Compact/defrag memory
   end
 
   def get_overlay_at(addr)
@@ -336,8 +321,10 @@ end
 
 m = Memory.new()
 
-m.do_delta(MemoryDelta.create_segment(MemorySegment.new("s1", 0x1000, 0x0000, "ABCDEFGHIJKLMNOP")))
-m.do_delta(MemoryDelta.create_segment(MemorySegment.new("s2", 0x2000, 0x0000, "abcdefghijklmnop")))
+m.do_delta(MemoryDelta.create_segment({ :type => 'segment', :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "ABCDEFGHIJKLMNOP"}))
+m.do_delta(MemoryDelta.create_segment({ :type => 'segment', :name => "s2", :address => 0x2000, :file_address => 0x1000, :data => "abcdefghijklmnop"}))
+
+puts(m.to_s)
 
 m.do_delta(MemoryDelta.create_node({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1004]}))
 m.do_delta(MemoryDelta.create_node({ :type => 'dword', :address => 0x1004, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1008]}))
