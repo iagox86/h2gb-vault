@@ -3,13 +3,30 @@
 # Created October 6, 2014
 
 require 'json'
-#require 'sinatra/activerecord'
+require 'sinatra/activerecord'
+
+ActiveRecord::Base.establish_connection(
+  :adapter => 'sqlite3',
+  :host    => nil,
+  :username => nil,
+  :password => nil,
+  :database => 'data.db',
+  :encoding => 'utf8',
+)
 
 class MemoryException < StandardError
 end
 
-class Memory
-  def initialize()
+class MemoryAbstraction < ActiveRecord::Base
+  DELTA_CHECKPOINT     = 'checkpoint'
+  DELTA_CREATE_SEGMENT = 'create_segment'
+  DELTA_DELETE_SEGMENT = 'delete_segment'
+  DELTA_CREATE_NODE    = 'create_node'
+  DELTA_DELETE_NODE    = 'delete_node'
+
+  serialize(:deltas)
+
+  def init_memory()
     # Segment info
     @segments = {}
 
@@ -18,9 +35,12 @@ class Memory
 
     # The metadata about memory
     @overlay  = []
+  end
 
-    # Real undo stuff
-    @deltas = []
+  def initialize()
+    init_memory()
+
+    super(:deltas => [])
   end
 
   def remove_node(node)
@@ -44,7 +64,7 @@ class Memory
   def undefine(addr, len)
     addr.upto(addr + len - 1) do |a|
       if(!@overlay[a][:node].nil?)
-        do_delta_internal(Memory.delete_node_delta(@overlay[a][:node]))
+        do_delta_internal(MemoryAbstraction.delete_node_delta(@overlay[a][:node]))
       end
     end
   end
@@ -184,29 +204,32 @@ class Memory
 
   def undo()
     loop do
-      d = @deltas.pop()
+      d = self.deltas.pop()
 
       if(d.nil?)
         break
       end
 
-      if(d[:type] == :checkpoint)
+      if(d[:type] == MemoryAbstraction::DELTA_CHECKPOINT)
         break
       end
 
-      do_delta_internal(Memory.invert_delta(d), false)
+      do_delta_internal(MemoryAbstraction.invert_delta(d), false)
     end
   end
 
   def do_delta_internal(delta, rewindable = true)
+    puts("delta[:type] => '#{delta[:type]}' (#{delta[:type].class})")
     case delta[:type]
-    when :create_node
+    when MemoryAbstraction::DELTA_CHECKPOINT
+      # do nothing
+    when MemoryAbstraction::DELTA_CREATE_NODE
       add_node(delta[:details])
-    when :delete_node
+    when MemoryAbstraction::DELTA_DELETE_NODE
       remove_node(delta[:details])
-    when :create_segment
+    when MemoryAbstraction::DELTA_CREATE_SEGMENT
       create_segment(delta[:details])
-    when :delete_segment
+    when MemoryAbstraction::DELTA_DELETE_SEGMENT
       delete_segment(delta[:details])
     else
       raise(MemoryException, "Unknown delta: #{delta}")
@@ -216,48 +239,55 @@ class Memory
     # Note: this has to be after the action, otherwise the undo history winds
     # up in the wrong order when actions recurse
     if(rewindable)
-      @deltas << delta
+      self.deltas << delta
     end
   end
 
   def do_delta(delta)
     # Record a checkpoint for 'undo' purposes
-    @deltas << Memory.create_checkpoint_delta()
+    self.deltas << MemoryAbstraction.create_checkpoint_delta()
 
     return do_delta_internal(delta)
   end
 
-  def Memory.create_checkpoint_delta()
-    return { :type => :checkpoint }
+  def replay_deltas()
+    self.deltas.each do |d|
+      do_delta_internal(d, false)
+    end
   end
 
-  def Memory.create_node_delta(node)
-    return { :type => :create_node, :details => node }
+  def MemoryAbstraction.create_checkpoint_delta()
+    return { :type => MemoryAbstraction::DELTA_CHECKPOINT }
   end
 
-  def Memory.delete_node_delta(node)
-    return { :type => :delete_node, :details => node }
+  def MemoryAbstraction.create_node_delta(node)
+    return { :type => MemoryAbstraction::DELTA_CREATE_NODE, :details => node }
   end
 
-  def Memory.create_segment_delta(segment)
-    return { :type => :create_segment, :details => segment }
+  def MemoryAbstraction.delete_node_delta(node)
+    return { :type => MemoryAbstraction::DELTA_DELETE_NODE, :details => node }
   end
 
-  def Memory.delete_segment_delta(segment)
-    return { :type => :delete_segment, :details => segment }
+  def MemoryAbstraction.create_segment_delta(segment)
+    return { :type => MemoryAbstraction::DELTA_CREATE_SEGMENT, :details => segment }
   end
 
-  def Memory.invert_delta(delta)
-    if(delta[:type] == :checkpoint)
-      return Memory.create_checkpoint_delta()
-    elsif(delta[:type] == :create_node)
-      return Memory.delete_node_delta(delta[:details])
-    elsif(delta[:type] == :delete_node)
-      return Memory.create_node_delta(delta[:details])
-    elsif(delta[:type] == :create_segment)
-      return Memory.delete_segment_delta(delta[:details])
-    elsif(delta[:type] == :delete_segment)
-      return Memory.create_segment_delta(delta[:details])
+  def MemoryAbstraction.delete_segment_delta(segment)
+    return { :type => MemoryAbstraction::DELTA_DELETE_SEGMENT, :details => segment }
+  end
+
+  def MemoryAbstraction.invert_delta(delta)
+    case delta[:type]
+    when MemoryAbstraction::DELTA_CHECKPOINT
+      return MemoryAbstraction.create_checkpoint_delta()
+    when MemoryAbstraction::DELTA_CREATE_NODE
+      return MemoryAbstraction.delete_node_delta(delta[:details])
+    when MemoryAbstraction::DELTA_DELETE_NODE
+      return MemoryAbstraction.create_node_delta(delta[:details])
+    when MemoryAbstraction::DELTA_CREATE_SEGMENT
+      return MemoryAbstraction.delete_segment_delta(delta[:details])
+    when MemoryAbstraction::DELTA_DELETE_SEGMENT
+      return MemoryAbstraction.create_segment_delta(delta[:details])
     else
       raise(MemoryException, "Unknown delta type: #{delta[:type]}")
     end
@@ -287,32 +317,47 @@ class Memory
     return s
   end
 
+  after_find do |c|
+    init_memory()
+    replay_deltas()
+  end
+
 end
 
-m = Memory.new()
+m = MemoryAbstraction.new()
 
-m.do_delta(Memory.create_segment_delta({ :type => 'segment', :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "ABCDEFGHIJKLMNOP"}))
-m.do_delta(Memory.create_segment_delta({ :type => 'segment', :name => "s2", :address => 0x2000, :file_address => 0x1000, :data => "abcdefghijklmnop"}))
+m.do_delta(MemoryAbstraction.create_segment_delta({ :type => 'segment', :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "ABCDEFGHIJKLMNOP"}))
+m.do_delta(MemoryAbstraction.create_segment_delta({ :type => 'segment', :name => "s2", :address => 0x2000, :file_address => 0x1000, :data => "abcdefghijklmnop"}))
+
+puts(m.to_s)
+
+m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1004]}))
+m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1004, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1008]}))
+m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1008, :length => 4, :details => { value: 0x41414141 }, :refs => [0x100c]}))
 
 puts(m.to_s)
 
-m.do_delta(Memory.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1004]}))
-m.do_delta(Memory.create_node_delta({ :type => 'dword', :address => 0x1004, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1008]}))
-m.do_delta(Memory.create_node_delta({ :type => 'dword', :address => 0x1008, :length => 4, :details => { value: 0x41414141 }, :refs => [0x100c]}))
+m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x42424242 }, :refs => [0x1004]}))
+m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'word' , :address => 0x1004, :length => 2, :details => { value: 0x4242 } }))
+m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'byte' , :address => 0x1008, :length => 1, :details => { value: 0x42 } }))
 
 puts(m.to_s)
-gets()
 
-m.do_delta(Memory.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x42424242 }, :refs => [0x1004]}))
-m.do_delta(Memory.create_node_delta({ :type => 'word' , :address => 0x1004, :length => 2, :details => { value: 0x4242 } }))
-m.do_delta(Memory.create_node_delta({ :type => 'byte' , :address => 0x1008, :length => 1, :details => { value: 0x42 } }))
+puts()
 
-puts(m.to_s)
-gets()
+m.save()
+id = m.id
+
+puts()
+puts("id = #{id}")
+puts()
+
+other_m = MemoryAbstraction.find(id)
+
+puts(other_m.to_s)
 
 while true do
   m.undo()
   puts(m.to_s)
   gets()
 end
-

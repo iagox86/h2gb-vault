@@ -13,11 +13,10 @@ class CreateTables < ActiveRecord::Migration
       t.timestamps()
     end
 
-    create_table(:memory_deltas) do |t|
+    create_table(:memory_abstractions) do |t|
       t.belongs_to(:binary)
 
-      t.string(:type)
-      t.text(:details)
+      t.text(:deltas)
 
       t.timestamps()
     end

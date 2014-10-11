@@ -24,16 +24,9 @@ ActiveRecord::Schema.define(version: 20140920215248) do
     t.datetime "updated_at"
   end
 
-  create_table "deltas", force: true do |t|
-    t.integer  "project_id"
-    t.text     "deltas"
-    t.datetime "created_at"
-    t.datetime "updated_at"
-  end
-
-  create_table "projects", force: true do |t|
+  create_table "memory_abstractions", force: true do |t|
     t.integer  "binary_id"
-    t.text     "view"
+    t.text     "deltas"
     t.datetime "created_at"
     t.datetime "updated_at"
   end
