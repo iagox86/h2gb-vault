@@ -8,17 +8,6 @@ require 'json'
 class MemoryException < StandardError
 end
 
-class MemoryOverlay
-  attr_accessor :address, :node, :raw, :xrefs
-
-  def initialize(address, node = nil, raw = nil, xrefs = nil)
-    @address = address
-    @node = node
-    @raw = raw || ""
-    @xrefs = xrefs || []
-  end
-end
-
 class Memory
   def initialize()
     # Segment info
@@ -37,13 +26,13 @@ class Memory
   def remove_node(node)
     # Remove the node from the overlay
     node[:address].upto(node[:address] + node[:length] - 1) do |addr|
-      @overlay[addr].node = nil
+      @overlay[addr][:node] = nil
     end
 
     # Go through its references, and remove xrefs as necessary
     if(!node[:refs].nil?)
       node[:refs].each do |ref|
-        xrefs = @overlay[ref].xrefs
+        xrefs = @overlay[ref][:xrefs]
         # It shouldn't ever be nil, but...
         if(!xrefs.nil?)
           xrefs.delete(node[:address])
@@ -54,8 +43,8 @@ class Memory
 
   def undefine(addr, len)
     addr.upto(addr + len - 1) do |a|
-      if(!@overlay[a].node.nil?)
-        do_delta_internal(Memory.delete_node_delta(@overlay[a].node))
+      if(!@overlay[a][:node].nil?)
+        do_delta_internal(Memory.delete_node_delta(@overlay[a][:node]))
       end
     end
   end
@@ -75,13 +64,14 @@ puts("addr = 0x%x" % addr)
 
     # Save the node to memory
     node[:address].upto(node[:address] + node[:length] - 1) do |addr|
-      @overlay[addr].node = node
+      @overlay[addr][:node] = node
     end
 
     if(!node[:refs].nil?)
       node[:refs].each do |ref|
         # Record the cross reference
-        @overlay[ref].xrefs << node[:address]
+        @overlay[ref][:xrefs] ||= []
+        @overlay[ref][:xrefs] << node[:address]
       end
     end
   end
@@ -107,8 +97,7 @@ puts("addr = 0x%x" % addr)
 
     # Create some empty overlays
     each_address_in_segment(segment) do |addr|
-      puts("X:: %x" % addr)
-      @overlay[addr] = MemoryOverlay.new(addr, nil)
+      @overlay[addr] = { :address => addr }
     end
   end
 
@@ -149,14 +138,14 @@ puts("addr = 0x%x" % addr)
     result = overlay.clone
 
     # If we aren't somewhere with an actual node, make a fake one
-    if(overlay.node.nil?)
-      result.node = { :type => "undefined", :address => addr, :length => 1, :details => { :value => "undefined" }}
+    if(overlay[:node].nil?)
+      result[:node] = { :type => "undefined", :address => addr, :length => 1, :details => { :value => "undefined" }}
     else
-      result.node = overlay.node.clone
+      result[:node] = overlay[:node].clone
     end
 
     # Add extra fields that we magically have
-    result.raw = get_bytes_at(addr, result.node[:length])
+    result[:raw] = get_bytes_at(addr, result[:node][:length])
 
     # And that's it!
     return result
@@ -173,7 +162,7 @@ puts("addr = 0x%x" % addr)
         i += 1
       else
         yield i, overlay
-        i += overlay.node[:length]
+        i += overlay[:node][:length]
       end
     end
   end
@@ -283,15 +272,15 @@ puts("addr = 0x%x" % addr)
     end
 
     each_node do |addr, overlay|
-      s += "0x%08x %s %s" % [addr, overlay.raw.unpack("H*").pop, overlay.node.to_s]
+      s += "0x%08x %s %s" % [addr, overlay[:raw].unpack("H*").pop, overlay[:node].to_s]
 
-      refs = overlay.node[:refs]
+      refs = overlay[:node][:refs]
       if(!refs.nil? && refs.length > 0)
         s += " REFS: " + (refs.map do |ref| '0x%08x' % ref; end).join(', ')
       end
 
-      if(overlay.xrefs.length > 0)
-        s += " XREFS: " + (overlay.xrefs.map do |ref| '0x%08x' % ref; end).join(', ')
+      if(!overlay[:xrefs].nil? && overlay[:xrefs].length > 0)
+        s += " XREFS: " + (overlay[:xrefs].map do |ref| '0x%08x' % ref; end).join(', ')
       end
       s += "\n"
     end
