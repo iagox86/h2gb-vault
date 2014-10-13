@@ -4,7 +4,8 @@ require 'sinatra'
 require 'sinatra/activerecord'
 
 require 'binary'
-require 'memory'
+require 'memory_abstraction'
+require 'workspace'
 
 require 'fileutils'
 require 'json'
@@ -24,7 +25,7 @@ ActiveRecord::Base.establish_connection(
   :encoding => 'utf8',
 )
 
-class Babel < Sinatra::Application
+class Vault < Sinatra::Application
   def add_status(status, table)
     table[:status] = status
     return table
@@ -65,7 +66,7 @@ class Babel < Sinatra::Application
     end
   end
 
-  def Babel.COMMAND(c)
+  def Vault.COMMAND(c)
     return /^\/#{c}\/([a-fA-F0-9-]+)$/
   end
 
@@ -120,7 +121,7 @@ class Babel < Sinatra::Application
     b.save()
 
 
-    redirect to('/static/test.html#' + b.id)
+    redirect to("/static/test.html##{b.id}")
   end
 
   post '/upload' do
@@ -132,17 +133,11 @@ class Babel < Sinatra::Application
     )
     b.save()
 
-    return add_status(0, {:id => b.id })
+    return add_status(0, {:binary_id => b.id })
   end
 
   get('/binaries') do
     return add_status(0, {:binaries => Binary.all().as_json() })
-  end
-
-  get(COMMAND('process')) do |id|
-    b = Binary.find(id)
-    b.process()
-    b.save()
   end
 
   get(COMMAND('download')) do |id|
@@ -153,39 +148,37 @@ class Babel < Sinatra::Application
     })
   end
 
-  get(COMMAND('parse')) do |id|
-    b = Binary.find(id)
-
-    return add_status(0, b.details())
-  end
-
   get(COMMAND('delete')) do |id|
     b = Binary.find(id)
     b.destroy()
   end
 
-  get(COMMAND('format')) do |id|
-    b = Binary.find(id)
-    return add_status(0, { format: b.format() })
+  get(/workspace\/create/) do
+    b = Binary.find(params['binary_id'])
+
+    w = b.workspaces.new(:name => params['name'])
+    w.save()
+
+    return add_status(0, {:workspace_id => w.id})
   end
 
-  get(COMMAND('disassemble')) do |id|
-    b = Binary.find(id)
+  get(/memory_abstraction\/create/) do
+    w = Workspace.find(params['workspace_id'])
 
-    offset = params['offset']
-    length = params['length']
-    arch = params['arch']
+    ma = w.memory_abstractions.new(:name => params['name'])
+    ma.save()
 
-    if(!offset.nil?)
-      offset = offset.to_i()
-    end
-    if(!length.nil?)
-      length = length.to_i()
-    end
+    return add_status(0, {:memory_abstraction_id => ma.id})
+  end
 
-    return add_status(0, {
-      :instructions => b.disassemble(offset, length, arch)
-    })
+  get(/memory_abstraction\/([0-9])+$/) do |memory_abstraction_id|
+    ma = MemoryAbstractions.find(memory_abstraction_id)
+
+    return add_status(0, {:memory_abstraction => ma.get_nodes()})
+  end
+
+  get(/memory_abstraction\/([0-9]+)\/do_actions/) do |memory_abstraction_id|
+    # TODO
   end
 
   get(/\/static\/([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/) do |file|

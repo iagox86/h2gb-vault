@@ -25,8 +25,16 @@ ActiveRecord::Schema.define(version: 20140920215248) do
   end
 
   create_table "memory_abstractions", force: true do |t|
-    t.integer  "binary_id"
+    t.integer  "workspace_id"
+    t.string   "name"
     t.text     "deltas"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  create_table "workspaces", force: true do |t|
+    t.integer  "binary_id"
+    t.string   "name"
     t.datetime "created_at"
     t.datetime "updated_at"
   end

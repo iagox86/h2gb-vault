@@ -13,9 +13,18 @@ class CreateTables < ActiveRecord::Migration
       t.timestamps()
     end
 
-    create_table(:memory_abstractions) do |t|
+    create_table(:workspaces) do |t|
       t.belongs_to(:binary)
 
+      t.string(:name)
+
+      t.timestamps()
+    end
+
+    create_table(:memory_abstractions) do |t|
+      t.belongs_to(:workspace)
+
+      t.string(:name)
       t.text(:deltas)
 
       t.timestamps()
