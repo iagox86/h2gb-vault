@@ -35,6 +35,7 @@ ActiveRecord::Schema.define(version: 20140920215248) do
   create_table "workspaces", force: true do |t|
     t.integer  "binary_id"
     t.string   "name"
+    t.text     "settings"
     t.datetime "created_at"
     t.datetime "updated_at"
   end

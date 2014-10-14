@@ -38,8 +38,10 @@ class MemoryAbstraction < ActiveRecord::Base
     @overlay  = []
   end
 
-  def initialize()
-    super(:deltas => [])
+  def initialize(params)
+    params[:deltas] ||= []
+
+    super(params)
   end
 
   def remove_node(node)
@@ -185,6 +187,16 @@ class MemoryAbstraction < ActiveRecord::Base
     end
   end
 
+  def nodes()
+    result = {}
+
+    each_node() do |addr, overlay|
+      result[addr] = overlay
+    end
+
+    return result
+  end
+
   def get_bytes_at(addr, length)
     return (@memory[addr, length].map do |c| c.chr end).join
   end
@@ -218,7 +230,6 @@ class MemoryAbstraction < ActiveRecord::Base
   end
 
   def do_delta_internal(delta, rewindable = true)
-    puts("delta[:type] => '#{delta[:type]}' (#{delta[:type].class})")
     case delta[:type]
     when MemoryAbstraction::DELTA_CHECKPOINT
       # do nothing

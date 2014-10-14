@@ -17,6 +17,7 @@ class CreateTables < ActiveRecord::Migration
       t.belongs_to(:binary)
 
       t.string(:name)
+      t.text(:settings)
 
       t.timestamps()
     end
