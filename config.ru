@@ -1,3 +1,3 @@
-require './Vault'
+require './vault'
 
 run Vault.new()

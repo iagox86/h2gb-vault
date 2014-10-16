@@ -13,8 +13,6 @@ require 'tempfile'
 
 require 'pp' # debug
 
-FORCE_TEXT = true
-
 # Database stuff
 ActiveRecord::Base.establish_connection(
   :adapter => 'sqlite3',
@@ -88,7 +86,7 @@ class Vault < Sinatra::Application
         'Content-Disposition' => 'Attachment'
       })
 
-      if(FORCE_TEXT)
+      if(params['force_text'])
         convert_to_text!(response.body)
       end
 
@@ -217,6 +215,12 @@ class Vault < Sinatra::Application
     ma = MemoryAbstraction.find(memory_id)
     ma.undo()
     ma.save()
+  end
+
+  get(COMMAND('memory', 'segments')) do |memory_id|
+    ma = MemoryAbstraction.find(memory_id)
+
+    return add_status(0, {:segments => ma.segments()})
   end
 
   get(COMMAND('memory', 'nodes')) do |memory_id|
