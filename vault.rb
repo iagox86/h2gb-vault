@@ -43,22 +43,26 @@ class Vault < Sinatra::Application
     end
   end
 
-  def convert_to_text!(h)
+  def nested_elements(h)
     if(h.is_a?(Hash))
       h.each do |k, v|
-        if(v.is_a?(Fixnum))
-          h[k] = convert_num(v)
-        elsif(v.is_a?(Hash) || v.is_a?(Array))
-          convert_to_text!(v)
+        if(v.is_a?(Hash) || v.is_a?(Array))
+          nested_elements(v) do |val|
+            yield(val)
+          end
+        else
+          h[k] = yield(v)
         end
       end
     elsif(h.is_a?(Array))
       h.each_index do |k|
         v = h[k]
-        if(v.is_a?(Fixnum))
-          h[k] = convert_num(v)
-        elsif(v.is_a?(Hash) || v.is_a?(Array))
-          convert_to_text!(v)
+        if(v.is_a?(Hash) || v.is_a?(Array))
+          nested_elements(v) do |val|
+            yield(val)
+          end
+        else
+          h[k] = yield(v)
         end
       end
     end
@@ -86,9 +90,18 @@ class Vault < Sinatra::Application
         'Content-Disposition' => 'Attachment'
       })
 
-      if(params['force_text'])
-        convert_to_text!(response.body)
+      nested_elements(response.body) do |e|
+        value = e
+
+        if(params['force_text'] && e.is_a?(Fixnum))
+          value = ('0x%x' % e)
+        elsif(e.is_a?(String))
+          value = e.force_encoding('ISO-8859-1')
+        end
+
+        value # return
       end
+
 
       if(params['pretty'])
         response.body = JSON.pretty_generate(response.body) + "\n"

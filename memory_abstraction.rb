@@ -162,7 +162,7 @@ class MemoryAbstraction < ActiveRecord::Base
     # If we aren't somewhere with an actual node, make a fake one
     if(overlay[:node].nil?)
       value = @memory[addr].ord()
-      if(value >= 0x20 || value < 0x7F)
+      if(value >= 0x20 && value < 0x7F)
         value = "0x%02x ; '%c'" % [value, value]
       else
         value = "0x%02x" % value
@@ -356,8 +356,8 @@ end
 if(ARGV[0] == "testmemory")
   m = MemoryAbstraction.new()
 
-  m.do_delta(MemoryAbstraction.create_segment_delta({ :type => 'segment', :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "ABCDEFGHIJKLMNOP"}))
-  m.do_delta(MemoryAbstraction.create_segment_delta({ :type => 'segment', :name => "s2", :address => 0x2000, :file_address => 0x1000, :data => "abcdefghijklmnop"}))
+  m.do_delta(MemoryAbstraction.create_segment_delta({ :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "\x5b\x5c\xca\xb9\x21\xa1\x65\x71\x53\x9a\x63\xd2\xd4\x5e\x7c\x55"}))
+  m.do_delta(MemoryAbstraction.create_segment_delta({ :name => "s2", :address => 0x2000, :file_address => 0x1000, :data => "\x74\x5c\xe2\x8e\x2f\x3c\xd1\xea"}))
 
   puts(m.to_s)
   $stdin.gets()
