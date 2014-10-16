@@ -38,10 +38,12 @@ class MemoryAbstraction < ActiveRecord::Base
     @overlay  = []
   end
 
-  def initialize(params)
+  def initialize(params = {})
     params[:deltas] ||= []
 
     super(params)
+
+    init_memory()
   end
 
   def remove_node(node)
@@ -169,6 +171,12 @@ class MemoryAbstraction < ActiveRecord::Base
 
     # And that's it!
     return result
+  end
+
+  def each_segment()
+    @segments.each do |segment|
+      yield(segment)
+    end
   end
 
   def each_node()
@@ -338,40 +346,47 @@ class MemoryAbstraction < ActiveRecord::Base
 
 end
 
-#m = MemoryAbstraction.new()
-#
-#m.do_delta(MemoryAbstraction.create_segment_delta({ :type => 'segment', :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "ABCDEFGHIJKLMNOP"}))
-#m.do_delta(MemoryAbstraction.create_segment_delta({ :type => 'segment', :name => "s2", :address => 0x2000, :file_address => 0x1000, :data => "abcdefghijklmnop"}))
-#
-#puts(m.to_s)
-#
-#m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1004]}))
-#m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1004, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1008]}))
-#m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1008, :length => 4, :details => { value: 0x41414141 }, :refs => [0x100c]}))
-#
-#puts(m.to_s)
-#
-#m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x42424242 }, :refs => [0x1004]}))
-#m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'word' , :address => 0x1004, :length => 2, :details => { value: 0x4242 } }))
-#m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'byte' , :address => 0x1008, :length => 1, :details => { value: 0x42 } }))
-#
-#puts(m.to_s)
-#
-#puts()
-#
-#m.save()
-#id = m.id
-#
-#puts()
-#puts("id = #{id}")
-#puts()
-#
-#other_m = MemoryAbstraction.find(id)
-#
-#puts(other_m.to_s)
-#
-#while true do
-#  m.undo()
-#  puts(m.to_s)
-#  gets()
-#end
+if(ARGV[0] == "testmemory")
+  m = MemoryAbstraction.new()
+
+  m.do_delta(MemoryAbstraction.create_segment_delta({ :type => 'segment', :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "ABCDEFGHIJKLMNOP"}))
+  m.do_delta(MemoryAbstraction.create_segment_delta({ :type => 'segment', :name => "s2", :address => 0x2000, :file_address => 0x1000, :data => "abcdefghijklmnop"}))
+
+  puts(m.to_s)
+  $stdin.gets()
+
+  m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1004]}))
+  m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1004, :length => 4, :details => { value: 0x41414141 }, :refs => [0x1008]}))
+  m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1008, :length => 4, :details => { value: 0x41414141 }, :refs => [0x100c]}))
+
+  puts(m.to_s)
+  $stdin.gets()
+
+  m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x42424242 }, :refs => [0x1004]}))
+  m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'word' , :address => 0x1004, :length => 2, :details => { value: 0x4242 } }))
+  m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'byte' , :address => 0x1008, :length => 1, :details => { value: 0x42 } }))
+
+  puts(m.to_s)
+  $stdin.gets()
+
+  puts()
+
+  m.save()
+  id = m.id
+
+  puts()
+  puts("id = #{id}")
+  puts()
+
+  other_m = MemoryAbstraction.find(id)
+
+  puts("Loaded from DB:")
+  puts(other_m.to_s)
+  $stdin.gets()
+
+  while true do
+    other_m.undo()
+    puts(other_m.to_s)
+    $stdin.gets()
+  end
+end
