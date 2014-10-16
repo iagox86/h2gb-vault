@@ -174,32 +174,33 @@ class MemoryAbstraction < ActiveRecord::Base
   end
 
   def each_segment()
-    @segments.each do |segment|
+    @segments.each_value do |segment|
       yield(segment)
     end
   end
 
   def each_node()
-    i = 0
+    each_segment() do |segment|
+      addr = segment[:address]
 
-    while(i < @overlay.length) do
-      overlay = get_overlay_at(i)
+      while(addr < segment[:address] + segment[:data].length()) do
+        overlay = get_overlay_at(addr)
+        yield(addr, overlay)
 
-      # If there was no overlay, just move on
-      if(overlay.nil?)
-        i += 1
-      else
-        yield i, overlay
-        i += overlay[:node][:length]
+        addr += overlay[:node][:length]
       end
     end
   end
 
+  def segments()
+    return @segments.clone
+  end
+
   def nodes()
-    result = {}
+    result = []
 
     each_node() do |addr, overlay|
-      result[addr] = overlay
+      result << overlay
     end
 
     return result
