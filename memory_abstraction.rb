@@ -161,7 +161,13 @@ class MemoryAbstraction < ActiveRecord::Base
 
     # If we aren't somewhere with an actual node, make a fake one
     if(overlay[:node].nil?)
-      result[:node] = { :type => "undefined", :address => addr, :length => 1, :details => { :value => "undefined" }}
+      value = @memory[addr].ord()
+      if(value >= 0x20 || value < 0x7F)
+        value = "0x%02x ; '%c'" % [value, value]
+      else
+        value = "0x%02x" % value
+      end
+      result[:node] = { :type => "undefined", :address => addr, :length => 1, :value => value, :details => { }}
     else
       result[:node] = overlay[:node].clone
     end
