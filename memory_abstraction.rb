@@ -119,7 +119,7 @@ class MemoryAbstraction < ActiveRecord::Base
 
     # Create some empty overlays
     each_address_in_segment(segment) do |addr|
-      @overlay[addr] = { :address => addr }
+      @overlay[addr] = {  }
     end
   end
 
@@ -361,6 +361,7 @@ if(ARGV[0] == "testmemory")
   m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1008, :length => 4, :details => { value: 0x41414141 }, :refs => [0x100c]}))
 
   puts(m.to_s)
+  puts(m.nodes)
   $stdin.gets()
 
   m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :details => { value: 0x42424242 }, :refs => [0x1004]}))

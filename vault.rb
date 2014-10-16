@@ -90,7 +90,12 @@ class Vault < Sinatra::Application
         convert_to_text!(response.body)
       end
 
-      response.body = JSON.pretty_generate(response.body) + "\n"
+      if(params['pretty'])
+        response.body = JSON.pretty_generate(response.body) + "\n"
+      else
+        response.body = JSON.generate(response.body) + "\n"
+      end
+
     end
   end
 
