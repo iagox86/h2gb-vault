@@ -267,8 +267,7 @@ class MemoryAbstraction < ActiveRecord::Base
     return get_bytes_at(addr, 1).ord
   end
 
-
-  def undo()
+  def undo(starting = nil)
     # Keep track of where we started so we can return just what changed
     start_revision = revision()
 
@@ -295,11 +294,11 @@ class MemoryAbstraction < ActiveRecord::Base
     end
 
     # Return the nodes that changed between the current revision and the the head
-    return state(start_revision)
+    return state(starting || start_revision)
   end
 
   # Note: this is the exact same as undo(), except with the lists swapped and no inverting
-  def redo()
+  def redo(starting = nil)
     # Keep track of where we started so we can return just what changed
     start_revision = revision()
 
@@ -328,7 +327,7 @@ class MemoryAbstraction < ActiveRecord::Base
     end
 
     # Return the nodes that changed between the current revision and the the head
-    return state(start_revision)
+    return state(starting || start_revision)
   end
 
   def do_delta_internal(delta)
@@ -353,7 +352,7 @@ class MemoryAbstraction < ActiveRecord::Base
     end
   end
 
-  def do_delta(delta)
+  def do_delta(delta, starting = nil)
     # Discard any REDO state
     self.redo_buffer.clear
 
@@ -369,7 +368,7 @@ class MemoryAbstraction < ActiveRecord::Base
     self.undo_buffer << delta
 
     # Return all the nodes since we started
-    return state(start_revision)
+    return state(starting || start_revision)
   end
 
   def MemoryAbstraction.create_checkpoint_delta()
