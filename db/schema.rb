@@ -28,6 +28,7 @@ ActiveRecord::Schema.define(version: 20140920215248) do
     t.integer  "workspace_id"
     t.string   "name"
     t.text     "deltas"
+    t.integer  "current_revision"
     t.datetime "created_at"
     t.datetime "updated_at"
   end

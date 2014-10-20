@@ -226,25 +226,33 @@ class Vault < Sinatra::Application
     ma.save()
 
     # TODO: Return the changed nodes
-    return add_status(0, {:memory_abstraction => ma.get_nodes()})
+    return add_status(0, {:memory_abstraction => ma.nodes(), :revision => ma.revision()})
   end
 
   get(COMMAND('memory', 'undo')) do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
     ma.undo()
     ma.save()
+
+    since = (params['since'] || 0).to_i()
+
+    return add_status(0, {:memory_abstraction => ma.nodes(since), :revision => ma.revision()})
   end
 
   get(COMMAND('memory', 'segments')) do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
 
-    return add_status(0, {:segments => ma.segments()})
+    since = (params['since'] || 0).to_i()
+
+    return add_status(0, {:segments => ma.segments(since)})
   end
 
   get(COMMAND('memory', 'nodes')) do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
 
-    return add_status(0, {:nodes => ma.nodes()})
+    since = (params['since'] || 0).to_i()
+
+    return add_status(0, {:nodes => ma.nodes(since)})
   end
 
   get(/\/static\/([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/) do |file|

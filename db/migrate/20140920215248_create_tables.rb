@@ -27,6 +27,7 @@ class CreateTables < ActiveRecord::Migration
 
       t.string(:name)
       t.text(:deltas)
+      t.integer(:current_revision)
 
       t.timestamps()
     end
