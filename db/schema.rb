@@ -28,7 +28,8 @@ ActiveRecord::Schema.define(version: 20140920215248) do
     t.integer  "workspace_id"
     t.string   "name"
     t.text     "deltas"
-    t.integer  "current_revision"
+    t.text     "undo_buffer"
+    t.text     "redo_buffer"
     t.datetime "created_at"
     t.datetime "updated_at"
   end

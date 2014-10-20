@@ -5,14 +5,16 @@
 require 'json'
 require 'sinatra/activerecord'
 
-ActiveRecord::Base.establish_connection(
-  :adapter => 'sqlite3',
-  :host    => nil,
-  :username => nil,
-  :password => nil,
-  :database => 'data.db',
-  :encoding => 'utf8',
-)
+if(ARGV[0] == "testmemory")
+  ActiveRecord::Base.establish_connection(
+    :adapter => 'sqlite3',
+    :host    => nil,
+    :username => nil,
+    :password => nil,
+    :database => 'data.db',
+    :encoding => 'utf8',
+  )
+end
 
 class MemoryException < StandardError
 end
@@ -25,6 +27,9 @@ class MemoryAbstraction < ActiveRecord::Base
   DELTA_DELETE_NODE    = 'delete_node'
 
   serialize(:deltas)
+  serialize(:undo_buffer)
+  serialize(:redo_buffer)
+
   self.belongs_to(:workspace)
 
   def init_memory()
@@ -39,8 +44,9 @@ class MemoryAbstraction < ActiveRecord::Base
   end
 
   def initialize(params = {})
-    params[:deltas] ||= []
-    params[:current_revision] ||= 0
+    params[:deltas]      ||= []
+    params[:undo_buffer] ||= []
+    params[:redo_buffer] ||= []
 
     super(params)
 
@@ -69,7 +75,10 @@ class MemoryAbstraction < ActiveRecord::Base
   def undefine(addr, len)
     addr.upto(addr + len - 1) do |a|
       if(!@overlay[a][:node].nil?)
-        do_delta_internal(MemoryAbstraction.delete_node_delta(@overlay[a][:node]))
+        action = MemoryAbstraction.delete_node_delta(@overlay[a][:node])
+        do_delta_internal(action)
+        self.deltas << action
+        self.undo_buffer << action
       end
     end
   end
@@ -138,12 +147,12 @@ class MemoryAbstraction < ActiveRecord::Base
     @memory[segment[:address], segment[:data].length()] = [nil] * segment[:data].length()
 
     # Get rid of the overlays
-    each_address_in_segment(segment) do |addr|
+    each_address_in_segment(@segments[segment[:name]]) do |addr|
       @overlay[addr] = nil
     end
 
     # Delete it from the segments table
-    @segments[segment[:name]][:is_deleted] = revision()
+    @segments[segment[:name]][:deleted] = revision()
   end
 
   def get_overlay_at(addr)
@@ -184,26 +193,27 @@ class MemoryAbstraction < ActiveRecord::Base
     return result
   end
 
-  def each_segment(since = nil)
-    since = nil
-
+  def each_segment(starting = nil)
     @segments.each_value do |segment|
-      if((since.nil? || segment[:revision] > since) && segment[:deleted].nil?)
+      if((starting.nil? || segment[:revision] >= starting) && segment[:deleted].nil?)
         yield(segment)
       end
     end
   end
 
-  def each_node(since = nil)
+  def each_node(starting = nil)
     # I want to get changed nodes in ALL segments (not just changed segments), so this
-    # method call needs to have since=nil
+    # method call needs to have starting=nil
     each_segment(nil) do |segment|
       addr = segment[:segment][:address]
 
       while(addr < segment[:segment][:address] + segment[:segment][:data].length()) do
         overlay = get_overlay_at(addr)
+        if(overlay.nil?)
+          puts("No overlay at #{addr}...")
+        end
 
-        if(since.nil? || overlay[:revision] > since)
+        if(starting.nil? || overlay[:revision] >= starting)
           yield(addr, overlay)
         end
 
@@ -213,22 +223,28 @@ class MemoryAbstraction < ActiveRecord::Base
   end
 
   def revision()
-    return self.current_revision()
+    return self.deltas.length()
   end
 
-  def segments(since)
+  def state(starting = nil)
+    starting ||= 0
+
+    return { :revision => revision(), :starting => starting, :segments => segments(starting), :nodes => nodes(starting) }
+  end
+
+  def segments(starting = nil)
     results = []
-    each_segment(since) do |segment|
+    each_segment(starting) do |segment|
       results << segment
     end
 
     return results
   end
 
-  def nodes(since = nil)
+  def nodes(starting = nil)
     result = []
 
-    each_node(since) do |addr, overlay|
+    each_node(starting) do |addr, overlay|
       result << overlay
     end
 
@@ -251,115 +267,109 @@ class MemoryAbstraction < ActiveRecord::Base
     return get_bytes_at(addr, 1).ord
   end
 
+
   def undo()
-    # Loop till we get to the start or hit a checkpoint
-    loop do
-      index = self.current_revision
-
-      # Break if we hit the start
-      if(index < 0)
-        break
-      end
-
-      # Get the delta at this index
-      d = self.deltas[index]
-
-      # Go to the previous revision
-      self.current_revision -= 1
-
-      # If it's a checkpoint, break out
-      if(d[:type] == MemoryAbstraction::DELTA_CHECKPOINT)
-        break
-      end
-
-      # Apply the inverse delta
-      do_delta_internal(MemoryAbstraction.invert_delta(d), false)
-    end
-
-    # Return the nodes that changed between the current revision and the the head
-    # TODO: If this actually works, I don't think it's the most efficient route
-    return { :segments => segments(self.current_revision), :nodes => nodes(self.current_revision) }
-  end
-
-  def redo()
     # Keep track of where we started so we can return just what changed
-    start_revision = self.current_revision
+    start_revision = revision()
 
     # Loop till we get to the start or hit a checkpoint
     loop do
-      index = self.current_revision
+      # Get the next thing to undo
+      d = self.undo_buffer.pop()
 
-      # Get the next delta
-      d = self.deltas[index + 1]
-
-      # If we're at the end of the list, break
+      # Check if we're at the start
       if(d.nil?)
         break
       end
 
-      # Increment the current revision
-      self.current_revision += 1
+      # Apply the inverse delta
+      inverted = MemoryAbstraction.invert_delta(d)
+      do_delta_internal(inverted)
+      self.deltas << inverted
+      self.redo_buffer << d
 
       # If it's a checkpoint, break out
       if(d[:type] == MemoryAbstraction::DELTA_CHECKPOINT)
         break
       end
-
-      # Re-apply the delta
-      do_delta_internal(d, false)
     end
 
     # Return the nodes that changed between the current revision and the the head
-    # TODO: Is this going to guarantee we get the right nodes? I feel like it does...
-    return { :segments => segments(start_revision - 1), :nodes => nodes(start_revision - 1) }
+    return state(start_revision)
   end
 
-  def do_delta_internal(delta, rewindable = true)
+  # Note: this is the exact same as undo(), except with the lists swapped and no inverting
+  def redo()
+    # Keep track of where we started so we can return just what changed
+    start_revision = revision()
+
+    # Loop till we get to the start or hit a checkpoint
+    loop do
+      # Get the next thing to redo
+      d = self.redo_buffer.pop()
+
+      # Check if we're at the start
+      if(d.nil?)
+        break
+      end
+
+      # Add it to the undo buffer
+      self.undo_buffer << d
+
+      # Apply the delta
+      do_delta_internal(d)
+      self.deltas << d
+      self.undo_buffer << d
+
+      # If it's a checkpoint, break out
+      if(d[:type] == MemoryAbstraction::DELTA_CHECKPOINT)
+        break
+      end
+    end
+
+    # Return the nodes that changed between the current revision and the the head
+    return state(start_revision)
+  end
+
+  def do_delta_internal(delta)
     case delta[:type]
     when MemoryAbstraction::DELTA_CHECKPOINT
       # do nothing
+      puts("DOING: checkpoint")
     when MemoryAbstraction::DELTA_CREATE_NODE
+      puts("DOING: add_node(#{delta[:details]})")
       add_node(delta[:details])
     when MemoryAbstraction::DELTA_DELETE_NODE
+      puts("DOING: delete_node(#{delta[:details]})")
       remove_node(delta[:details])
     when MemoryAbstraction::DELTA_CREATE_SEGMENT
+      puts("DOING: create_segment(#{delta[:details]})")
       create_segment(delta[:details])
     when MemoryAbstraction::DELTA_DELETE_SEGMENT
+      puts("DOING: delete_segment(#{delta[:details]})")
       delete_segment(delta[:details])
     else
       raise(MemoryException, "Unknown delta: #{delta}")
     end
-
-    # Record this action
-    # Note: this has to be after the action, otherwise the undo history winds
-    # up in the wrong order when actions recurse
-    if(rewindable)
-      # Add the new delta
-      self.deltas << delta
-
-      # Set the appropriate revision
-      self.current_revision = self.deltas.length
-    end
   end
 
   def do_delta(delta)
-    # Discard REDO state if we have any
-    if(self.current_revision != self.deltas.length())
-      puts("(discarding REDO state, current state is #{self.current_revision} but we have a state of #{self.deltas.length()})")
-      self.deltas = self.deltas[0, self.current_revision]
-    end
+    # Discard any REDO state
+    self.redo_buffer.clear
 
     # Remember which revision we started on so we can send all the changed nodes
     start_revision = revision()
 
     # Record a checkpoint for 'undo' purposes
-    self.deltas << MemoryAbstraction.create_checkpoint_delta()
+    self.undo_buffer << MemoryAbstraction.create_checkpoint_delta()
 
     # Do the delta
     do_delta_internal(delta)
+    self.deltas << delta
+    self.undo_buffer << delta
 
     # Return all the nodes since we started
-    return { :segments => segments(start_revision), :nodes => nodes(start_revision) }
+    return state(start_revision)
   end
 
   def MemoryAbstraction.create_checkpoint_delta()
@@ -399,15 +409,15 @@ class MemoryAbstraction < ActiveRecord::Base
     end
   end
 
-  def to_s(since = nil)
-    s = "Current revision: #{self.current_revision} (showing revisions since #{since || 0}):\n"
+  def to_s(starting = nil)
+    s = "Current revision: #{revision()} (showing revisions starting #{starting || 0}):\n"
 
-    each_segment(since) do |segment|
+    each_segment(starting) do |segment|
       s += segment.to_s + "\n"
     end
 
-    each_node(since) do |addr, overlay|
-      s += "0x%08x %s %s" % [addr, overlay[:raw].unpack("H*").pop, overlay[:node].to_s]
+    each_node(starting) do |addr, overlay|
+      s += "[%2d] 0x%08x %s %s" % [overlay[:revision], addr, overlay[:raw].unpack("H*").pop, overlay[:node].to_s]
 
       refs = overlay[:node][:refs]
       if(!refs.nil? && refs.length > 0)
@@ -428,9 +438,8 @@ class MemoryAbstraction < ActiveRecord::Base
     init_memory()
 
     # Replay all the deltas
-    0.upto(self.current_revision - 1) do |i|
-      d = self.deltas[i]
-      do_delta_internal(d, false)
+    self.deltas.each do |d|
+      do_delta_internal(d)
     end
   end
 
@@ -446,52 +455,70 @@ if(ARGV[0] == "testmemory")
 
   r = m.revision()
 
-  puts("A:")
+  puts("A: creating s1")
   puts m.do_delta(MemoryAbstraction.create_segment_delta({ :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "\x5b\x5c\xca\xb9\x21\xa1\x65\x71\x53\x9a\x63\xd2\xd4\x5e\x7c\x55"}))
-  #puts(m.to_s(r))
-  #r = m.revision()
   #$stdin.gets()
 
-  puts("B:")
-  puts m.do_delta(MemoryAbstraction.create_segment_delta({ :name => "s2", :address => 0x2000, :file_address => 0x1000, :data => "\x74\x5c\xe2\x8e\x2f\x3c\xd1\xea"}))
-  #puts(m.to_s(r))
-  #r = m.revision()
-  #$stdin.gets()
-  exit
+  puts("A-0-1: creating a byte")
+  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'byte',  :address => 0x1000, :length => 1, :value => "dd 0x41"}))
+  puts("A-0-2: replacing with a dword")
+  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141"}))
+  puts("A-0-3: replacing with a byte")
+  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'byte',  :address => 0x1000, :length => 1, :value => "dd 0x41"}))
+  puts("A-0-4: replacing with a dword")
+  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141"}))
 
-  m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
-  puts(m.to_s(r))
-  r = m.revision()
-  $stdin.gets()
-
-  m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1004, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1008]}))
-  puts(m.to_s(r))
-  r = m.revision()
-  $stdin.gets()
-
-  m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1008, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x100c]}))
-  puts(m.to_s(r))
-  r = m.revision()
-  $stdin.gets()
-
-  m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x42424242", :details => { value: 0x42424242 }, :refs => [0x1004]}))
-  puts(m.to_s(r))
-  r = m.revision()
-  $stdin.gets()
-
-  m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'word' , :address => 0x1004, :length => 2, :value => "dw 0x4242",     :details => { value: 0x4242 }, :refs => [0x1008]}))
-  puts(m.to_s(r))
-  r = m.revision()
-  $stdin.gets()
-
-  m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'byte' , :address => 0x1008, :length => 1, :value => "db 0x42",       :details => { value: 0x42 } }))
-  puts(m.to_s(r))
-  r = m.revision()
-  $stdin.gets()
-
-  exit
+  puts("Undo: replacing dword")
+  puts(m.undo())
+  puts("Undo: replacing byte")
+  puts(m.undo())
+  puts("Undo: replacing dword")
+  puts(m.undo())
+  puts("Undo: creating byte")
+  puts(m.undo())
+  puts("Undo: creating segment")
+  puts(m.undo())
 
   puts()
+  puts("This should be empty:")
+  puts(m.to_s())
+
+  $stdin.gets()
+
+  puts("A-3: re-creating s1")
+  puts m.do_delta(MemoryAbstraction.create_segment_delta({ :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "\x5b\x5c\xca\xb9\x21\xa1\x65\x71\x53\x9a\x63\xd2\xd4\x5e\x7c\x55"}))
+  #$stdin.gets()
+
+  puts("B: creating s2")
+  puts m.do_delta(MemoryAbstraction.create_segment_delta({ :name => "s2", :address => 0x2000, :file_address => 0x1000, :data => "\x74\x5c\xe2\x8e\x2f\x3c\xd1\xea"}))
+  #$stdin.gets()
+
+  puts("C: creating a plain ol' dword")
+  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
+  #$stdin.gets()
+
+  puts("D: creating another plain ol' dword")
+  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1004, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1008]}))
+  #$stdin.gets()
+
+  puts("E: creating another plain ol' dword")
+  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1008, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x100c]}))
+  #$stdin.gets()
+
+  puts("F: Creating a dword that should undefine another dword")
+  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x42424242", :details => { value: 0x42424242 }, :refs => [0x1004]}))
+  #$stdin.gets()
+
+  puts("G: Creating a word that should undefine a dword")
+  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'word' , :address => 0x1004, :length => 2, :value => "dw 0x4242",     :details => { value: 0x4242 }, :refs => [0x1008]}))
+  #$stdin.gets()
+
+  puts("G: Creating a byte that should undefine a dword")
+  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'byte' , :address => 0x1008, :length => 1, :value => "db 0x42",       :details => { value: 0x42 } }))
+  #$stdin.gets()
+
+  puts()
+  puts("Doing a save + load")
 
   m.save()
   id = m.id
@@ -504,10 +531,23 @@ if(ARGV[0] == "testmemory")
 
   puts("Loaded from DB:")
   puts(other_m.to_s)
+  puts()
   $stdin.gets()
+  puts()
 
-  while true do
-    other_m.undo()
+  while other_m.segments.length > 0 do
+    puts other_m.undo()
+    puts()
+    puts(other_m.to_s)
+    $stdin.gets()
+  end
+
+  # This will break the REDO chain
+  #puts other_m.do_delta(MemoryAbstraction.create_segment_delta({ :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "\x5b\x5c\xca\xb9\x21\xa1\x65\x71\x53\x9a\x63\xd2\xd4\x5e\x7c\x55"}))
+
+  loop do
+    puts other_m.redo()
+    puts()
     puts(other_m.to_s)
     $stdin.gets()
   end
