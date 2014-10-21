@@ -436,9 +436,17 @@ class MemoryAbstraction < ActiveRecord::Base
     # Initialize the objects we need
     init_memory()
 
-    # Replay all the deltas
-    self.deltas.each do |d|
-      do_delta_internal(d)
+    # Make a copy of the deltas
+    # TODO: I don't love this.. it feels very hackish
+    d = self.deltas
+
+    # Clear the deltas list (this is to reset the revision number)
+    self.deltas = []
+
+    # Now, re-play the deltas as if they were new
+    d.each do |delta|
+      do_delta_internal(delta)
+      self.deltas << d
     end
   end
 
