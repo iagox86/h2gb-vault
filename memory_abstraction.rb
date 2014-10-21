@@ -78,7 +78,7 @@ class MemoryAbstraction < ActiveRecord::Base
   def undefine(addr, len)
     addr.upto(addr + len - 1) do |a|
       if(!@overlay[a][:node].nil?)
-        action = MemoryAbstraction.delete_node_delta(@overlay[a][:node])
+        action = delete_node_delta(addr)
         do_delta_internal(action)
         self.deltas << action
         self.undo_buffer << action
@@ -89,7 +89,7 @@ class MemoryAbstraction < ActiveRecord::Base
     end
   end
 
-  def add_node(node)
+  def create_node(node)
     # Make sure there's enough room for the entire node
     node[:address].upto(node[:address] + node[:length] - 1) do |addr|
       # There's no memory
@@ -123,6 +123,10 @@ class MemoryAbstraction < ActiveRecord::Base
   end
 
   def create_segment(segment)
+    # TODO: If you create a segment, undo, then create it again, this will fail. Should it?
+    if(!@segments[segment[:name]].nil?)
+      raise(MemoryException, "That segment name is already in use!")
+    end
     # Make sure the memory isn't already in use
     memory = @memory[segment[:address], segment[:data].length()]
     if(!(memory.nil? || memory.compact().length() == 0))
@@ -133,7 +137,6 @@ class MemoryAbstraction < ActiveRecord::Base
     @segments[segment[:name]] = {
       :segment => segment,
       :revision => revision(),
-      :deleted => nil,
     }
 
     # Map the data into memory
@@ -158,7 +161,9 @@ class MemoryAbstraction < ActiveRecord::Base
     end
 
     # Delete it from the segments table
-    @segments[segment[:name]][:deleted] = revision()
+    # TODO: For some reason, I wanted to keep segments in the table.. I forget why, though
+    #@segments[segment[:name]][:deleted] = revision()
+    @segments.delete(segment[:name])
   end
 
   def get_overlay_at(addr)
@@ -201,7 +206,7 @@ class MemoryAbstraction < ActiveRecord::Base
 
   def each_segment(starting = nil)
     @segments.each_value do |segment|
-      if((starting.nil? || segment[:revision] >= starting) && segment[:deleted].nil?)
+      if(starting.nil? || segment[:revision] >= starting)
         yield(segment)
       end
     end
@@ -288,7 +293,7 @@ class MemoryAbstraction < ActiveRecord::Base
       end
 
       # Apply the inverse delta
-      inverted = MemoryAbstraction.invert_delta(d)
+      inverted = invert_delta(d)
       do_delta_internal(inverted)
       self.deltas << inverted
       self.redo_buffer << d
@@ -351,8 +356,8 @@ class MemoryAbstraction < ActiveRecord::Base
       # do nothing
       puts("DOING: checkpoint")
     when MemoryAbstraction::DELTA_CREATE_NODE
-      puts("DOING: add_node(#{delta[:details]})")
-      add_node(delta[:details])
+      puts("DOING: create_node(#{delta[:details]})")
+      create_node(delta[:details])
     when MemoryAbstraction::DELTA_DELETE_NODE
       puts("DOING: delete_node(#{delta[:details]})")
       delete_node(delta[:details])
@@ -375,7 +380,7 @@ class MemoryAbstraction < ActiveRecord::Base
     start_revision = revision()
 
     # Record a checkpoint for 'undo' purposes
-    self.undo_buffer << MemoryAbstraction.create_checkpoint_delta()
+    self.undo_buffer << create_checkpoint_delta()
 
     # Do the delta
     do_delta_internal(delta)
@@ -386,38 +391,49 @@ class MemoryAbstraction < ActiveRecord::Base
     return state(starting || start_revision)
   end
 
-  def MemoryAbstraction.create_checkpoint_delta()
+  def create_checkpoint_delta()
     return { :type => MemoryAbstraction::DELTA_CHECKPOINT }
   end
 
-  def MemoryAbstraction.create_node_delta(node)
+  def create_node_delta(node)
     return { :type => MemoryAbstraction::DELTA_CREATE_NODE, :details => node }
   end
 
-  def MemoryAbstraction.delete_node_delta(node)
+  def delete_node_delta(address)
+    overlay = get_overlay_at(address)
+    if(overlay.nil?)
+      raise(MemoryException, "Couldn't find any nodes at that address!")
+    end
+
+    node = overlay[:node]
+    if(node.nil?)
+      raise(MemoryException, "Couldn't find any nodes at that address!")
+    end
+
     return { :type => MemoryAbstraction::DELTA_DELETE_NODE, :details => node }
   end
 
-  def MemoryAbstraction.create_segment_delta(segment)
+  def create_segment_delta(segment)
     return { :type => MemoryAbstraction::DELTA_CREATE_SEGMENT, :details => segment }
   end
 
-  def MemoryAbstraction.delete_segment_delta(segment)
+  def delete_segment_delta(name)
+    segment = @segments[name][:segment]
     return { :type => MemoryAbstraction::DELTA_DELETE_SEGMENT, :details => segment }
   end
 
-  def MemoryAbstraction.invert_delta(delta)
+  def invert_delta(delta)
     case delta[:type]
     when MemoryAbstraction::DELTA_CHECKPOINT
-      return MemoryAbstraction.create_checkpoint_delta()
+      return create_checkpoint_delta()
     when MemoryAbstraction::DELTA_CREATE_NODE
-      return MemoryAbstraction.delete_node_delta(delta[:details])
+      return delete_node_delta(delta[:details][:address])
     when MemoryAbstraction::DELTA_DELETE_NODE
-      return MemoryAbstraction.create_node_delta(delta[:details])
+      return create_node_delta(delta[:details])
     when MemoryAbstraction::DELTA_CREATE_SEGMENT
-      return MemoryAbstraction.delete_segment_delta(delta[:details])
+      return delete_segment_delta(delta[:details][:name])
     when MemoryAbstraction::DELTA_DELETE_SEGMENT
-      return MemoryAbstraction.create_segment_delta(delta[:details])
+      return create_segment_delta(delta[:details])
     else
       raise(MemoryException, "Unknown delta type: #{delta[:type]}")
     end
@@ -483,17 +499,17 @@ if(ARGV[0] == "testmemory")
   r = m.revision()
 
   puts("A: creating s1")
-  puts m.do_delta(MemoryAbstraction.create_segment_delta({ :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "\x5b\x5c\xca\xb9\x21\xa1\x65\x71\x53\x9a\x63\xd2\xd4\x5e\x7c\x55"}))
+  puts m.do_delta(m.create_segment_delta({ :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "\x5b\x5c\xca\xb9\x21\xa1\x65\x71\x53\x9a\x63\xd2\xd4\x5e\x7c\x55"}))
   #$stdin.gets()
 
   puts("A-0-1: creating a byte")
-  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'byte',  :address => 0x1000, :length => 1, :value => "dd 0x41"}))
+  puts m.do_delta(m.create_node_delta({ :type => 'byte',  :address => 0x1000, :length => 1, :value => "dd 0x41"}))
   puts("A-0-2: replacing with a dword")
-  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141"}))
+  puts m.do_delta(m.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141"}))
   puts("A-0-3: replacing with a byte")
-  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'byte',  :address => 0x1000, :length => 1, :value => "dd 0x41"}))
+  puts m.do_delta(m.create_node_delta({ :type => 'byte',  :address => 0x1000, :length => 1, :value => "dd 0x41"}))
   puts("A-0-4: replacing with a dword")
-  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141"}))
+  puts m.do_delta(m.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141"}))
 
   puts("Undo: replacing dword")
   puts(m.undo())
@@ -512,36 +528,43 @@ if(ARGV[0] == "testmemory")
 
   $stdin.gets()
 
-  puts("A-3: re-creating s1")
-  puts m.do_delta(MemoryAbstraction.create_segment_delta({ :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "\x5b\x5c\xca\xb9\x21\xa1\x65\x71\x53\x9a\x63\xd2\xd4\x5e\x7c\x55"}))
+  puts("A-3: creating s3")
+  puts m.do_delta(m.create_segment_delta({ :name => "s3", :address => 0x1000, :file_address => 0x0000, :data => "\x5b\x5c\xca\xb9\x21\xa1\x65\x71\x53\x9a\x63\xd2\xd4\x5e\x7c\x55"}))
   #$stdin.gets()
 
   puts("B: creating s2")
-  puts m.do_delta(MemoryAbstraction.create_segment_delta({ :name => "s2", :address => 0x2000, :file_address => 0x1000, :data => "\x74\x5c\xe2\x8e\x2f\x3c\xd1\xea"}))
-  #$stdin.gets()
+  puts m.do_delta(m.create_segment_delta({ :name => "s2", :address => 0x2000, :file_address => 0x1000, :data => "\x74\x5c\xe2\x8e\x2f\x3c\xd1\xea"}))
+  puts m.to_s
+  $stdin.gets()
+
+  puts("B2: dropping s2")
+  puts m.do_delta(m.delete_segment_delta("s2"))
+  puts m.to_s
+  $stdin.gets()
+
 
   puts("C: creating a plain ol' dword")
-  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
+  puts m.do_delta(m.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
   #$stdin.gets()
 
   puts("D: creating another plain ol' dword")
-  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1004, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1008]}))
+  puts m.do_delta(m.create_node_delta({ :type => 'dword', :address => 0x1004, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1008]}))
   #$stdin.gets()
 
   puts("E: creating another plain ol' dword")
-  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1008, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x100c]}))
+  puts m.do_delta(m.create_node_delta({ :type => 'dword', :address => 0x1008, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x100c]}))
   #$stdin.gets()
 
   puts("F: Creating a dword that should undefine another dword")
-  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x42424242", :details => { value: 0x42424242 }, :refs => [0x1004]}))
+  puts m.do_delta(m.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x42424242", :details => { value: 0x42424242 }, :refs => [0x1004]}))
   #$stdin.gets()
 
   puts("G: Creating a word that should undefine a dword")
-  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'word' , :address => 0x1004, :length => 2, :value => "dw 0x4242",     :details => { value: 0x4242 }, :refs => [0x1008]}))
+  puts m.do_delta(m.create_node_delta({ :type => 'word' , :address => 0x1004, :length => 2, :value => "dw 0x4242",     :details => { value: 0x4242 }, :refs => [0x1008]}))
   #$stdin.gets()
 
   puts("G: Creating a byte that should undefine a dword")
-  puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'byte' , :address => 0x1008, :length => 1, :value => "db 0x42",       :details => { value: 0x42 } }))
+  puts m.do_delta(m.create_node_delta({ :type => 'byte' , :address => 0x1008, :length => 1, :value => "db 0x42",       :details => { value: 0x42 } }))
   #$stdin.gets()
 
   puts()

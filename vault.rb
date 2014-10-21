@@ -23,6 +23,9 @@ ActiveRecord::Base.establish_connection(
   :encoding => 'utf8',
 )
 
+class VaultException < StandardError
+end
+
 class Vault < Sinatra::Application
 #  set :environment, :production
 
@@ -104,7 +107,6 @@ class Vault < Sinatra::Application
         value # return
       end
 
-
       if(params['pretty'])
         response.body = JSON.pretty_generate(response.body) + "\n"
       else
@@ -152,7 +154,7 @@ class Vault < Sinatra::Application
     b = Binary.new(
       :name         => body[:name],
       :comment      => body[:comment],
-      :data         => body[:data],
+      :data         => Base64.decode64(body[:data]),
     )
     b.save()
 
@@ -168,7 +170,7 @@ class Vault < Sinatra::Application
     return add_status(0, {
       :name    => b.name,
       :comment => b.comment,
-      :data    => b.data,
+      :data    => Base64.encode64(b.data),
     })
   end
 
@@ -248,6 +250,94 @@ class Vault < Sinatra::Application
 
     return add_status(0, memory_response(ma, params))
   end
+
+  post(COMMAND('memory', 'create_segment')) do |memory_id|
+    ma = MemoryAbstraction.find(memory_id)
+    segments = JSON.parse(params['segment'], :symbolize_names => true)
+
+    # Make sure it's an array
+    if(segments.is_a?(Hash))
+      segments = [segments]
+    end
+
+    # Loop through the one or more segments we need to create and do them
+    segments.each do |segment|
+      segment[:data] = Base64.decode64(segment[:data])
+      ma.do_delta(MemoryAbstraction.create_segment_delta(segment))
+    end
+    ma.save()
+
+    return add_status(0, memory_response(ma, params))
+  end
+
+  post(COMMAND('memory', 'delete_segment')) do |memory_id|
+    ma = MemoryAbstraction.find(memory_id)
+    segments = JSON.parse(params['segment'], :symbolize_names => true)
+
+    # If it's just a string, make it into an array
+    if(segments.is_a?(String))
+      segments = [segments]
+    end
+
+    # If it isn't an array, we have problems
+    if(!segments.is_a?(Array))
+      raise(VaultException, "delete_segment requires one or more names as the body")
+    end
+
+    # Loop through the one or more segments we need to create and do them
+    segments.each do |segment|
+      ma.do_delta(MemoryAbstraction.delete_segment_delta(segment))
+    end
+    ma.save()
+
+    return add_status(0, memory_response(ma, params))
+  end
+
+  post(COMMAND('memory', 'create_node')) do |memory_id|
+    ma = MemoryAbstraction.find(memory_id)
+    nodes = JSON.parse(params['node'], :symbolize_names => true)
+
+    # Make sure it's an array
+    if(nodes.is_a?(Hash))
+      nodes = [nodes]
+    end
+
+    # Loop through the one or more nodes we need to create and do them
+    nodes.each do |node|
+      ma.do_delta(MemoryAbstraction.create_node_delta(node))
+    end
+    ma.save()
+
+    return add_status(0, memory_response(ma, params))
+  end
+
+  post(COMMAND('memory', 'delete_node')) do |memory_id|
+    ma = MemoryAbstraction.find(memory_id)
+    nodes = JSON.parse(params['node'], :symbolize_names => true)
+
+    # If it's just a string, make it into an array
+    if(nodes.is_a?(Fixnum))
+      nodes = [nodes]
+    end
+
+    # If it isn't an array, we have problems
+    if(!nodes.is_a?(Array))
+      raise(VaultException, "delete_node requires one or more names as the body")
+    end
+
+    # Loop through the one or more nodes we need to create and do them
+    nodes.each do |node|
+      if(!node.is_a?(Fixnum))
+        raise(VaultException, "delete_node requires a single or an array of addresses as integers")
+      end
+      ma.do_delta(MemoryAbstraction.delete_node_delta(node))
+    end
+    ma.save()
+
+    return add_status(0, memory_response(ma, params))
+  end
+
+  #puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
 
   post(COMMAND('memory', 'undo')) do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
