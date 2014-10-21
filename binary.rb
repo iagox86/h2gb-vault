@@ -16,7 +16,7 @@ class Binary < ActiveRecord::Base
     # Keep track of the 'data' field separately
     @data = params.delete(:data)
     if(@data.nil?)
-      raise Exception, "ERROR"
+      raise(Exception, "No data was provided")
     end
 
     # Create a UUID instead of using a 'real' id

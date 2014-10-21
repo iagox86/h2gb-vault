@@ -5,10 +5,7 @@ class CreateTables < ActiveRecord::Migration
 
       t.string(:name)
       t.string(:filename)
-      t.string(:arch)
-      t.integer(:base_address)
       t.string(:comment)
-      t.boolean(:is_processed)
 
       t.timestamps()
     end

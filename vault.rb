@@ -147,10 +147,12 @@ class Vault < Sinatra::Application
   end
 
   post('/binary/upload') do
+    body = JSON.parse(request.body.read, :symbolize_names => true)
+
     b = Binary.new(
-      :name         => params['filename'],
-      :comment      => params['comment'],
-      :data         => params['data'],
+      :name         => body[:name],
+      :comment      => body[:comment],
+      :data         => body[:data],
     )
     b.save()
 
@@ -165,8 +167,8 @@ class Vault < Sinatra::Application
     b = Binary.find(binary_id)
     return add_status(0, {
       :name    => b.name,
-      :command => b.comment,
-      :file    => Base64.encode64(b.data),
+      :comment => b.comment,
+      :data    => b.data,
     })
   end
 

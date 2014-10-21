@@ -16,10 +16,7 @@ ActiveRecord::Schema.define(version: 20140920215248) do
   create_table "binaries", force: true do |t|
     t.string   "name"
     t.string   "filename"
-    t.string   "arch"
-    t.integer  "base_address"
     t.string   "comment"
-    t.boolean  "is_processed"
     t.datetime "created_at"
     t.datetime "updated_at"
   end
