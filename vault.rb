@@ -227,7 +227,7 @@ class Vault < Sinatra::Application
   end
 
   def memory_response(ma, params, p = {})
-    starting = (params['starting'] || 0).to_i()
+    starting = (params['starting'] || ma.starting_revision || 0).to_i()
 
     if(p[:only_nodes])
       return {:revision => ma.revision(), :memory => ma.nodes(starting)}
@@ -240,15 +240,8 @@ class Vault < Sinatra::Application
 
   post(COMMAND('memory', 'do_delta')) do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
-    deltas = JSON.parse(params['delta'], :symbolize_names => true)
-
-    if(deltas.is_a?(Array))
-      deltas.each do |delta|
-        ma.do_delta(delta)
-      end
-    else
-      ma.do_delta(deltas)
-    end
+    delta = JSON.parse(params['delta'], :symbolize_names => true)
+    ma.do_delta(delta)
     ma.save()
 
     return add_status(0, memory_response(ma, params))
