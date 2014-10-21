@@ -227,7 +227,7 @@ class Vault < Sinatra::Application
   end
 
   def memory_response(ma, params, p = {})
-    starting = (params['starting'] || ma.revision() - 1).to_i()
+    starting = (params['starting'] || 0).to_i()
 
     if(p[:only_nodes])
       return {:revision => ma.revision(), :memory => ma.nodes(starting)}
