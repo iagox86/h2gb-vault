@@ -190,6 +190,12 @@ class Vault < Sinatra::Application
     return add_status(0, {:workspace_id => w.id})
   end
 
+  get(COMMAND('binary', 'workspaces')) do |binary_id|
+    b = Binary.find(binary_id)
+
+    return add_status(0, {:workspaces => b.workspaces.all().as_json() })
+  end
+
   post(COMMAND('workspace', 'create_memory')) do |workspace_id|
     w = Workspace.find(workspace_id)
 
@@ -207,14 +213,36 @@ class Vault < Sinatra::Application
   end
 
   post(COMMAND('workspace', 'set')) do |workspace_id|
-    w = Workspace.find(workspace_id)
-    name = params['name']
-    value = params['value']
+    body = JSON.parse(request.body.read, :symbolize_names => true)
 
-    w.set(name, value)
+    w = Workspace.find(workspace_id)
+
+    # Make sure it's an array
+    if(body.is_a?(Hash))
+      body = [body]
+    end
+
+    # Make sure the body is sane
+    if(!body.is_a?(Array))
+      raise(VaultException, "The 'set' command requires an hash (or an array of hashes) containing 'name' and 'value' fields")
+    end
+
+    # Loop through the body
+    body.each do |kv|
+      name  = kv[:name]
+      value = kv[:value]
+
+      # Make sure we have a sane name
+      if(!name.is_a?(String))
+        raise(VaultException, "The 'set' command requires a hash (or an array of hashes) containing 'name' and 'value' fields")
+      end
+
+      puts("Setting %s => %s" % [name, value.to_s])
+      w.set(name, value)
+    end
     w.save()
 
-    return add_status(0, {:name => name, :value => value})
+    return add_status(0, {})
   end
 
   delete(COMMAND('workspace')) do |workspace_id|
@@ -234,9 +262,9 @@ class Vault < Sinatra::Application
     starting = (params['starting'] || ma.starting_revision || 0).to_i()
 
     if(p[:only_nodes])
-      return {:revision => ma.revision(), :memory => ma.nodes(starting)}
+      return {:revision => ma.revision(), :nodes => ma.nodes(starting)}
     elsif(p[:only_segments])
-      return {:revision => ma.revision(), :memory => ma.segments(starting)}
+      return {:revision => ma.revision(), :segments => ma.segments(starting)}
     else
       return {:revision => ma.revision(), :memory => ma.state(starting)}
     end
@@ -250,20 +278,28 @@ class Vault < Sinatra::Application
 
     return add_status(0, memory_response(ma, params))
   end
-
   post(COMMAND('memory', 'create_segment')) do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
-    segments = JSON.parse(params['segment'], :symbolize_names => true)
+
+    body = JSON.parse(request.body.read, :symbolize_names => true)
+    if(body[:segment].nil?)
+      pp body
+      raise(VaultException, "Required field: 'segment'.")
+    end
 
     # Make sure it's an array
+    segments = body[:segment]
     if(segments.is_a?(Hash))
       segments = [segments]
     end
 
     # Loop through the one or more segments we need to create and do them
     segments.each do |segment|
+      if(!segment[:data].is_a?(String))
+        raise(VaultException, "Segments require a base64-encoded 'data' field")
+      end
       segment[:data] = Base64.decode64(segment[:data])
-      ma.do_delta(MemoryAbstraction.create_segment_delta(segment))
+      ma.do_delta(ma.create_segment_delta(segment))
     end
     ma.save()
 
@@ -286,7 +322,7 @@ class Vault < Sinatra::Application
 
     # Loop through the one or more segments we need to create and do them
     segments.each do |segment|
-      ma.do_delta(MemoryAbstraction.delete_segment_delta(segment))
+      ma.do_delta(ma.delete_segment_delta(segment))
     end
     ma.save()
 
@@ -295,16 +331,22 @@ class Vault < Sinatra::Application
 
   post(COMMAND('memory', 'create_node')) do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
-    nodes = JSON.parse(params['node'], :symbolize_names => true)
+
+    body = JSON.parse(request.body.read, :symbolize_names => true)
+    if(body[:node].nil?)
+      pp body
+      raise(VaultException, "Required field: 'node'.")
+    end
 
     # Make sure it's an array
+    nodes = body[:node]
     if(nodes.is_a?(Hash))
       nodes = [nodes]
     end
 
     # Loop through the one or more nodes we need to create and do them
     nodes.each do |node|
-      ma.do_delta(MemoryAbstraction.create_node_delta(node))
+      ma.do_delta(ma.create_node_delta(node))
     end
     ma.save()
 
@@ -330,14 +372,14 @@ class Vault < Sinatra::Application
       if(!node.is_a?(Fixnum))
         raise(VaultException, "delete_node requires a single or an array of addresses as integers")
       end
-      ma.do_delta(MemoryAbstraction.delete_node_delta(node))
+      ma.do_delta(ma.delete_node_delta(node))
     end
     ma.save()
 
     return add_status(0, memory_response(ma, params))
   end
 
-  #puts m.do_delta(MemoryAbstraction.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
+  #puts m.do_delta(ma.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
 
   post(COMMAND('memory', 'undo')) do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
@@ -356,13 +398,20 @@ class Vault < Sinatra::Application
   get(COMMAND('memory', 'segments')) do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
 
-    return add_status(0, memory_response(ma, params), :only_segments => true)
+    return add_status(0, memory_response(ma, params, :only_segments => true))
   end
 
   get(COMMAND('memory', 'nodes')) do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
 
-    return add_status(0, memory_response(ma, params), :only_nodes => true)
+    return add_status(0, memory_response(ma, params, :only_nodes => true))
+  end
+
+  delete(COMMAND('memory')) do |memory_id|
+    b = MemoryAbstraction.find(memory_id)
+    b.destroy()
+
+    return add_status(0, {})
   end
 
   # TODO: This is testing only

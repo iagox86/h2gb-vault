@@ -188,9 +188,9 @@ class MemoryAbstraction < ActiveRecord::Base
     if(overlay[:node].nil?)
       value = @memory[addr].ord()
       if(value >= 0x20 && value < 0x7F)
-        value = "0x%02x ; '%c'" % [value, value]
+        value = "<undefined> 0x%02x ; '%c'" % [value, value]
       else
-        value = "0x%02x" % value
+        value = "<undefined> 0x%02x" % value
       end
       result[:node] = { :type => "undefined", :address => addr, :length => 1, :value => value, :details => { }}
     else
@@ -198,7 +198,7 @@ class MemoryAbstraction < ActiveRecord::Base
     end
 
     # Add extra fields that we magically have
-    result[:raw] = get_bytes_at(addr, result[:node][:length])
+    result[:raw] = Base64.encode64(get_bytes_at(addr, result[:node][:length]))
 
     # And that's it!
     return result
@@ -240,7 +240,7 @@ class MemoryAbstraction < ActiveRecord::Base
   def state(starting = nil)
     starting ||= 0
 
-    return { :revision => revision(), :starting => starting, :segments => segments(starting), :nodes => nodes(starting) }
+    return { :segments => segments(starting), :nodes => nodes(starting) }
   end
 
   def segments(starting = nil)
@@ -447,7 +447,7 @@ class MemoryAbstraction < ActiveRecord::Base
     end
 
     each_node(starting) do |addr, overlay|
-      s += "[%2d] 0x%08x %s %s" % [overlay[:revision], addr, overlay[:raw].unpack("H*").pop, overlay[:node].to_s]
+      s += "[%2d] 0x%08x %s %s" % [overlay[:revision], addr, Base64.decode64(overlay[:raw]).unpack("H*").pop, overlay[:node].to_s]
 
       refs = overlay[:node][:refs]
       if(!refs.nil? && refs.length > 0)
