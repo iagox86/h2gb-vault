@@ -27,6 +27,7 @@ ActiveRecord::Schema.define(version: 20140920215248) do
     t.text     "deltas"
     t.text     "undo_buffer"
     t.text     "redo_buffer"
+    t.text     "snapshot"
     t.datetime "created_at"
     t.datetime "updated_at"
   end

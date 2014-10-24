@@ -29,20 +29,26 @@ class MemoryAbstraction < ActiveRecord::Base
   serialize(:deltas)
   serialize(:undo_buffer)
   serialize(:redo_buffer)
+  serialize(:snapshot)
 
   attr_reader :starting_revision
 
   self.belongs_to(:workspace)
 
+  # NOTE: If adding any fields to these, the take_snapshot() function has to be
+  # updated as well
   def init_memory()
-    # Segment info
-    @segments = {}
+    if(self.snapshot)
+      puts("We have a snapshot to load!")
 
-    # The byte-by-byte memory
-    @memory   = []
-
-    # The metadata about memory
-    @overlay  = []
+      @segments         = self.snapshot[:segments]
+      @memory           = self.snapshot[:memory]
+      @overlay          = self.snapshot[:overlay]
+    else
+      @segments = {}
+      @memory   = []
+      @overlay  = []
+    end
   end
 
   def initialize(params = {})
@@ -341,6 +347,19 @@ class MemoryAbstraction < ActiveRecord::Base
     return state(starting || start_revision)
   end
 
+  def take_snapshot()
+    puts()
+    puts("** TAKING SNAPSHOT **")
+    puts()
+
+    self.snapshot = {
+      :segments => @segments,
+      :memory   => @memory,
+      :overlay  => @overlay,
+      :revision => revision(),
+    }
+  end
+
   def do_delta_internal(delta)
     # Handle arrays of deltas transparently
     if(delta.is_a?(Array))
@@ -370,6 +389,9 @@ class MemoryAbstraction < ActiveRecord::Base
     else
       raise(MemoryException, "Unknown delta: #{delta}")
     end
+
+    # Take a snapshot
+    take_snapshot()
   end
 
   def do_delta(delta, starting = nil)
@@ -467,23 +489,8 @@ class MemoryAbstraction < ActiveRecord::Base
     # Initialize the objects we need
     init_memory()
 
-    # Make a copy of the deltas
-    # TODO: I don't love this.. it feels very hackish
-    d = self.deltas
-    puts("START: #{d.length} deltas")
-
-    # Clear the deltas list (this is to reset the revision number)
-    self.deltas = []
-
-    # Now, re-play the deltas as if they were new
-    d.each do |delta|
-      do_delta_internal(delta)
-      self.deltas << delta
-    end
-
     # Set up the starting revision
     @starting_revision = revision()
-    puts("END: #{d.length} deltas")
   end
 
   after_create do |c|

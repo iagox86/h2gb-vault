@@ -26,6 +26,7 @@ class CreateTables < ActiveRecord::Migration
       t.text(:deltas)
       t.text(:undo_buffer)
       t.text(:redo_buffer)
+      t.text(:snapshot)
 
       t.timestamps()
     end
