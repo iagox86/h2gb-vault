@@ -6,6 +6,8 @@ require 'sinatra/activerecord'
 require 'securerandom'
 
 class Binary < ActiveRecord::Base
+  attr_accessor :data
+
   # Because I'm using UUIDs for the primary key, this needs to be defined
 #  self.primary_key = :id
   self.has_many(:workspaces)
@@ -26,6 +28,10 @@ class Binary < ActiveRecord::Base
     super(params)
   end
 
+  after_find do
+    @data = IO.read(self.filename())
+  end
+
   # Overwrite 'save' to save the data to the disk
   def save()
     super()
@@ -34,12 +40,9 @@ class Binary < ActiveRecord::Base
     puts(self.inspect)
     puts()
 
-    # Write the data to the disk
-    if(@data)
-      File.open(self.filename, "wb") do |f|
-        f.write(@data)
-        f.close()
-      end
+    File.open(self.filename, "wb") do |f|
+      f.write(@data)
+      f.close()
     end
   end
 
@@ -52,10 +55,6 @@ class Binary < ActiveRecord::Base
 
   def filename()
     return Binary::UPLOAD_PATH + '/' + self.id().to_s()
-  end
-
-  def data(offset = nil, size = nil)
-    return IO.read(self.filename(), size, offset)
   end
 
   def format()

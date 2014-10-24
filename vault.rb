@@ -134,21 +134,7 @@ class Vault < Sinatra::Application
     return "Welcome to h2gb! If you don't know what to do, you probably don't need to be here. :)"
   end
 
-  # TODO: I don't really think I need this anymore
-  post('/binary/upload_html') do
-    content_type 'text/html'
-
-    b = Binary.new(
-      :name => params['file'][:filename],
-      :comment => params['comment'],
-      :data => params['file'][:tempfile].read()
-    )
-    b.save()
-
-    redirect to("/static/test.html##{b.id}")
-  end
-
-  post('/binary/upload') do
+  post('/binary') do
     body = JSON.parse(request.body.read, :symbolize_names => true)
 
     b = Binary.new(
@@ -158,20 +144,33 @@ class Vault < Sinatra::Application
     )
     b.save()
 
-    return add_status(0, {:binary_id => b.id })
+    return add_status(0, {:id => b.id })
   end
 
   get('/binaries') do
     return add_status(0, {:binaries => Binary.all().as_json() })
   end
 
-  get(COMMAND('binary', 'download')) do |binary_id|
+  get(COMMAND('binary')) do |binary_id|
     b = Binary.find(binary_id)
     return add_status(0, {
-      :name    => b.name,
-      :comment => b.comment,
-      :data    => Base64.encode64(b.data),
+      :id         => b.id,
+      :name       => b.name,
+      :comment    => b.comment,
+      :data       => Base64.encode64(b.data),
     })
+  end
+
+  put(COMMAND('binaries')) do |binary_id|
+    body = JSON.parse(request.body.read, :symbolize_names => true)
+
+    b = Binary.find(binary_id)
+    b.name = body[:name]
+    b.comment = body[:comment]
+    b.data = Base64.decode64(body[:data])
+    b.save()
+
+    return add_status(0, {:id => b.id })
   end
 
   delete(COMMAND('binary')) do |binary_id|
@@ -182,18 +181,29 @@ class Vault < Sinatra::Application
   end
 
   post(COMMAND('binary', 'create_workspace')) do |binary_id|
-    b = Binary.find(binary_id)
+    body = JSON.parse(request.body.read, :symbolize_names => true)
 
-    w = b.workspaces.new(:name => params['name'])
+    b = Binary.find(binary_id)
+    w = b.workspaces.new(:name => body[:name])
     w.save()
 
-    return add_status(0, {:workspace_id => w.id})
+    return add_status(0, {:id => w.id})
   end
 
   get(COMMAND('binary', 'workspaces')) do |binary_id|
     b = Binary.find(binary_id)
 
     return add_status(0, {:workspaces => b.workspaces.all().as_json() })
+  end
+
+  put(COMMAND('workspace')) do |workspace_id|
+    body = JSON.parse(request.body.read, :symbolize_names => true)
+
+    w = Workspace.find(workspace_id)
+    w.name = body[:name]
+    w.save()
+
+    return add_status(0, {:id => w.id })
   end
 
   post(COMMAND('workspace', 'create_memory')) do |workspace_id|
@@ -214,6 +224,8 @@ class Vault < Sinatra::Application
 
   post(COMMAND('workspace', 'set')) do |workspace_id|
     body = JSON.parse(request.body.read, :symbolize_names => true)
+
+    puts(body.inspect)
 
     w = Workspace.find(workspace_id)
 
@@ -255,7 +267,7 @@ class Vault < Sinatra::Application
   get(COMMAND('workspace')) do |workspace_id|
     w = Workspace.find(workspace_id)
 
-    return add_status(0, {:settings => w.settings})
+    return add_status(0, {:id => workspace_id, :name => w.name, :settings => w.settings})
   end
 
   def memory_response(ma, params, p = {})
@@ -270,14 +282,15 @@ class Vault < Sinatra::Application
     end
   end
 
-  post(COMMAND('memory', 'do_delta')) do |memory_id|
-    ma = MemoryAbstraction.find(memory_id)
-    delta = JSON.parse(params['delta'], :symbolize_names => true)
-    ma.do_delta(delta)
-    ma.save()
+#  post(COMMAND('memory', 'do_delta')) do |memory_id|
+#    ma = MemoryAbstraction.find(memory_id)
+#    delta = JSON.parse(params['delta'], :symbolize_names => true)
+#    ma.do_delta(delta)
+#    ma.save()
+#
+#    return add_status(0, memory_response(ma, params))
+#  end
 
-    return add_status(0, memory_response(ma, params))
-  end
   post(COMMAND('memory', 'create_segment')) do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
 
