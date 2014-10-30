@@ -73,14 +73,6 @@ class Vault < Sinatra::Application
     end
   end
 
-  def Vault.COMMAND(obj, action = nil)
-    if(action.nil?)
-      return /^\/#{obj}\/([a-fA-F0-9-]+)$/
-    else
-      return /^\/#{obj}\/([a-fA-F0-9-]+)\/#{action}$/
-    end
-  end
-
   # Add important headers and encode everything as JSON
   after do
     if(response.content_type.nil?)
@@ -134,7 +126,8 @@ class Vault < Sinatra::Application
     return "Welcome to h2gb! If you don't know what to do, you probably don't need to be here. :)"
   end
 
-  post('/binary') do
+  # Create a binary
+  post('/binaries') do
     body = JSON.parse(request.body.read, :symbolize_names => true)
 
     b = Binary.new(
@@ -147,11 +140,13 @@ class Vault < Sinatra::Application
     return add_status(0, {:id => b.id })
   end
 
+  # List binaries (note: doesn't return file contents)
   get('/binaries') do
     return add_status(0, {:binaries => Binary.all().as_json() })
   end
 
-  get(COMMAND('binary')) do |binary_id|
+  # Download a binary
+  get('/binaries/:binary_id') do |binary_id|
     b = Binary.find(binary_id)
     return add_status(0, {
       :id         => b.id,
@@ -161,7 +156,8 @@ class Vault < Sinatra::Application
     })
   end
 
-  put(COMMAND('binaries')) do |binary_id|
+  # Update binary
+  put('/binaries/:binary_id') do |binary_id|
     body = JSON.parse(request.body.read, :symbolize_names => true)
 
     b = Binary.find(binary_id)
@@ -173,14 +169,15 @@ class Vault < Sinatra::Application
     return add_status(0, {:id => b.id })
   end
 
-  delete(COMMAND('binary')) do |binary_id|
+  # Delete binary
+  delete('/binaries/:binary_id') do |binary_id|
     b = Binary.find(binary_id)
     b.destroy()
 
     return add_status(0, {})
   end
 
-  post(COMMAND('binary', 'create_workspace')) do |binary_id|
+  post('/binaries/:binary_id/new_workspace') do |binary_id|
     body = JSON.parse(request.body.read, :symbolize_names => true)
 
     b = Binary.find(binary_id)
@@ -190,13 +187,14 @@ class Vault < Sinatra::Application
     return add_status(0, {:id => w.id})
   end
 
-  get(COMMAND('binary', 'workspaces')) do |binary_id|
+  get('/binaries/:binary_id/workspaces') do |binary_id|
     b = Binary.find(binary_id)
 
     return add_status(0, {:workspaces => b.workspaces.all().as_json() })
   end
 
-  put(COMMAND('workspace')) do |workspace_id|
+  # Update workspace
+  put('/workspaces/:workspace_id') do |workspace_id|
     body = JSON.parse(request.body.read, :symbolize_names => true)
 
     w = Workspace.find(workspace_id)
@@ -206,7 +204,8 @@ class Vault < Sinatra::Application
     return add_status(0, {:id => w.id })
   end
 
-  post(COMMAND('workspace', 'create_memory')) do |workspace_id|
+  # Create memory
+  post('/workspaces/:workspace_id/new_memory') do |workspace_id|
     w = Workspace.find(workspace_id)
 
     ma = w.memory_abstractions.new(:name => params['name'])
@@ -215,14 +214,16 @@ class Vault < Sinatra::Application
     return add_status(0, {:memory_id => ma.id})
   end
 
-  get(COMMAND('workspace', 'get')) do |workspace_id|
+  # Get setting
+  get('/workspaces/:workspace_id/get') do |workspace_id|
     w = Workspace.find(workspace_id)
     name = params['name']
 
     return add_status(0, {:name => name, :value => w.get(name)})
   end
 
-  post(COMMAND('workspace', 'set')) do |workspace_id|
+  # Set setting
+  post('/workspaces/:workspace_id/set') do |workspace_id|
     body = JSON.parse(request.body.read, :symbolize_names => true)
 
     puts(body.inspect)
@@ -257,17 +258,25 @@ class Vault < Sinatra::Application
     return add_status(0, {})
   end
 
-  delete(COMMAND('workspace')) do |workspace_id|
+  delete('/workspaces/:workspace_id') do |workspace_id|
     w = Workspace.find(workspace_id)
     w.destroy()
 
     return add_status(0, {})
   end
 
-  get(COMMAND('workspace')) do |workspace_id|
+  # Get a workspace
+  get('/workspaces/:workspace_id') do |workspace_id|
     w = Workspace.find(workspace_id)
 
     return add_status(0, {:id => workspace_id, :name => w.name, :settings => w.settings})
+  end
+
+  # Get memory for a workspace
+  get('/workspaces/:workspace_id/memories') do |workspace_id|
+    w = Workspace.find(workspace_id)
+
+    return add_status(0, {:memories => w.memories.all().as_json() })
   end
 
   def memory_response(ma, params, p = {})
@@ -282,16 +291,7 @@ class Vault < Sinatra::Application
     end
   end
 
-#  post(COMMAND('memory', 'do_delta')) do |memory_id|
-#    ma = MemoryAbstraction.find(memory_id)
-#    delta = JSON.parse(params['delta'], :symbolize_names => true)
-#    ma.do_delta(delta)
-#    ma.save()
-#
-#    return add_status(0, memory_response(ma, params))
-#  end
-
-  post(COMMAND('memory', 'create_segment')) do |memory_id|
+  post('/memory/:memory_id/new_segment') do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
 
     body = JSON.parse(request.body.read, :symbolize_names => true)
@@ -319,7 +319,7 @@ class Vault < Sinatra::Application
     return add_status(0, memory_response(ma, params))
   end
 
-  post(COMMAND('memory', 'delete_segment')) do |memory_id|
+  post('/memory/:memory_id/delete_segment') do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
     segments = JSON.parse(params['segment'], :symbolize_names => true)
 
@@ -342,7 +342,7 @@ class Vault < Sinatra::Application
     return add_status(0, memory_response(ma, params))
   end
 
-  post(COMMAND('memory', 'create_node')) do |memory_id|
+  post('/memory/:memory_id/new_node') do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
 
     body = JSON.parse(request.body.read, :symbolize_names => true)
@@ -366,7 +366,7 @@ class Vault < Sinatra::Application
     return add_status(0, memory_response(ma, params))
   end
 
-  post(COMMAND('memory', 'delete_node')) do |memory_id|
+  post('/memory/:memory_id/delete_node') do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
     nodes = JSON.parse(params['node'], :symbolize_names => true)
 
@@ -394,7 +394,7 @@ class Vault < Sinatra::Application
 
   #puts m.do_delta(ma.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
 
-  post(COMMAND('memory', 'undo')) do |memory_id|
+  post('/memory/:memory_id/undo') do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
     ma.undo()
     ma.save()
@@ -402,25 +402,26 @@ class Vault < Sinatra::Application
     return add_status(0, memory_response(ma, params))
   end
 
-  get(COMMAND('memory')) do |memory_id|
+  # Find memory
+  get('/memory/:memory_id') do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
 
     return add_status(0, memory_response(ma, params))
   end
 
-  get(COMMAND('memory', 'segments')) do |memory_id|
+  get('/memory/:memory_id/segments') do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
 
     return add_status(0, memory_response(ma, params, :only_segments => true))
   end
 
-  get(COMMAND('memory', 'nodes')) do |memory_id|
+  get('/memory/:memory_id/nodes') do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
 
     return add_status(0, memory_response(ma, params, :only_nodes => true))
   end
 
-  delete(COMMAND('memory')) do |memory_id|
+  delete('/memory/:memory_id') do |memory_id|
     b = MemoryAbstraction.find(memory_id)
     b.destroy()
 
@@ -428,7 +429,7 @@ class Vault < Sinatra::Application
   end
 
   # TODO: This is testing only
-  get(COMMAND('memory', 'clear')) do |memory_id|
+  get('/memory/:memory_id/clear') do |memory_id|
     ma = MemoryAbstraction.find(memory_id)
     ma.deltas = []
     ma.undo_buffer = []
