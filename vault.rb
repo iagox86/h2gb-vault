@@ -137,7 +137,12 @@ class Vault < Sinatra::Application
     )
     b.save()
 
-    return add_status(0, {:id => b.id })
+    return add_status(0, {
+      :id         => b.id,
+      :name       => b.name,
+      :comment    => b.comment,
+      :data       => Base64.encode64(b.data),
+    })
   end
 
   # List binaries (note: doesn't return file contents)
@@ -166,7 +171,12 @@ class Vault < Sinatra::Application
     b.data = Base64.decode64(body[:data])
     b.save()
 
-    return add_status(0, {:id => b.id })
+    return add_status(0, {
+      :id         => b.id,
+      :name       => b.name,
+      :comment    => b.comment,
+      :data       => Base64.encode64(b.data),
+    })
   end
 
   # Delete binary
@@ -184,7 +194,7 @@ class Vault < Sinatra::Application
     w = b.workspaces.new(:name => body[:name])
     w.save()
 
-    return add_status(0, {:id => w.id})
+    return add_status(0, {:id => w.id, :name => w.name, :settings => w.settings})
   end
 
   get('/binaries/:binary_id/workspaces') do |binary_id|
@@ -201,14 +211,14 @@ class Vault < Sinatra::Application
     w.name = body[:name]
     w.save()
 
-    return add_status(0, {:id => w.id })
+    return add_status(0, {:id => w.id, :name => w.name, :settings => w.settings})
   end
 
   # Create memory
   post('/workspaces/:workspace_id/new_memory') do |workspace_id|
     w = Workspace.find(workspace_id)
 
-    ma = w.memory_abstractions.new(:name => params['name'])
+    ma = w.memories.new(:name => params['name'])
     ma.save()
 
     return add_status(0, {:memory_id => ma.id})
@@ -292,7 +302,7 @@ class Vault < Sinatra::Application
   end
 
   post('/memory/:memory_id/new_segment') do |memory_id|
-    ma = MemoryAbstraction.find(memory_id)
+    ma = Memory.find(memory_id)
 
     body = JSON.parse(request.body.read, :symbolize_names => true)
     if(body[:segment].nil?)
@@ -320,7 +330,7 @@ class Vault < Sinatra::Application
   end
 
   post('/memory/:memory_id/delete_segment') do |memory_id|
-    ma = MemoryAbstraction.find(memory_id)
+    ma = Memory.find(memory_id)
     segments = JSON.parse(params['segment'], :symbolize_names => true)
 
     # If it's just a string, make it into an array
@@ -343,7 +353,7 @@ class Vault < Sinatra::Application
   end
 
   post('/memory/:memory_id/new_node') do |memory_id|
-    ma = MemoryAbstraction.find(memory_id)
+    ma = Memory.find(memory_id)
 
     body = JSON.parse(request.body.read, :symbolize_names => true)
     if(body[:node].nil?)
@@ -367,7 +377,7 @@ class Vault < Sinatra::Application
   end
 
   post('/memory/:memory_id/delete_node') do |memory_id|
-    ma = MemoryAbstraction.find(memory_id)
+    ma = Memory.find(memory_id)
     nodes = JSON.parse(params['node'], :symbolize_names => true)
 
     # If it's just a string, make it into an array
@@ -395,7 +405,7 @@ class Vault < Sinatra::Application
   #puts m.do_delta(ma.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
 
   post('/memory/:memory_id/undo') do |memory_id|
-    ma = MemoryAbstraction.find(memory_id)
+    ma = Memory.find(memory_id)
     ma.undo()
     ma.save()
 
@@ -404,25 +414,25 @@ class Vault < Sinatra::Application
 
   # Find memory
   get('/memory/:memory_id') do |memory_id|
-    ma = MemoryAbstraction.find(memory_id)
+    ma = Memory.find(memory_id)
 
     return add_status(0, memory_response(ma, params))
   end
 
   get('/memory/:memory_id/segments') do |memory_id|
-    ma = MemoryAbstraction.find(memory_id)
+    ma = Memory.find(memory_id)
 
     return add_status(0, memory_response(ma, params, :only_segments => true))
   end
 
   get('/memory/:memory_id/nodes') do |memory_id|
-    ma = MemoryAbstraction.find(memory_id)
+    ma = Memory.find(memory_id)
 
     return add_status(0, memory_response(ma, params, :only_nodes => true))
   end
 
   delete('/memory/:memory_id') do |memory_id|
-    b = MemoryAbstraction.find(memory_id)
+    b = Memory.find(memory_id)
     b.destroy()
 
     return add_status(0, {})
@@ -430,7 +440,7 @@ class Vault < Sinatra::Application
 
   # TODO: This is testing only
   get('/memory/:memory_id/clear') do |memory_id|
-    ma = MemoryAbstraction.find(memory_id)
+    ma = Memory.find(memory_id)
     ma.deltas = []
     ma.undo_buffer = []
     ma.redo_buffer = []

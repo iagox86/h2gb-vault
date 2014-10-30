@@ -19,7 +19,7 @@ class CreateTables < ActiveRecord::Migration
       t.timestamps()
     end
 
-    create_table(:memory_abstractions) do |t|
+    create_table(:memories) do |t|
       t.belongs_to(:workspace)
 
       t.string(:name)
