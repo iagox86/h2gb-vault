@@ -214,16 +214,6 @@ class Vault < Sinatra::Application
     return add_status(0, {:id => w.id, :name => w.name, :settings => w.settings})
   end
 
-  # Create view
-  post('/workspaces/:workspace_id/new_view') do |workspace_id|
-    w = Workspace.find(workspace_id)
-
-    ma = w.views.new(:name => params['name'])
-    ma.save()
-
-    return add_status(0, {:view_id => ma.id})
-  end
-
   # Get setting
   get('/workspaces/:workspace_id/get') do |workspace_id|
     w = Workspace.find(workspace_id)
@@ -275,14 +265,24 @@ class Vault < Sinatra::Application
     return add_status(0, {})
   end
 
-  # Get a workspace
+  # Get info about a workspace
   get('/workspaces/:workspace_id') do |workspace_id|
     w = Workspace.find(workspace_id)
 
     return add_status(0, {:id => workspace_id, :name => w.name, :settings => w.settings})
   end
 
-  # Get view for a workspace
+  # Create view
+  post('/workspaces/:workspace_id/new_view') do |workspace_id|
+    w = Workspace.find(workspace_id)
+
+    ma = w.views.new(:name => params['name'])
+    ma.save()
+
+    return add_status(0, {:view_id => ma.id})
+  end
+
+  # Get views for a workspace
   get('/workspaces/:workspace_id/views') do |workspace_id|
     w = Workspace.find(workspace_id)
 
