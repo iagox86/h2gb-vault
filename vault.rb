@@ -4,7 +4,7 @@ require 'sinatra'
 require 'sinatra/activerecord'
 
 require 'binary'
-require 'memory_abstraction'
+require 'view'
 require 'workspace'
 
 require 'fileutils'
@@ -214,14 +214,14 @@ class Vault < Sinatra::Application
     return add_status(0, {:id => w.id, :name => w.name, :settings => w.settings})
   end
 
-  # Create memory
-  post('/workspaces/:workspace_id/new_memory') do |workspace_id|
+  # Create view
+  post('/workspaces/:workspace_id/new_view') do |workspace_id|
     w = Workspace.find(workspace_id)
 
-    ma = w.memories.new(:name => params['name'])
+    ma = w.views.new(:name => params['name'])
     ma.save()
 
-    return add_status(0, {:memory_id => ma.id})
+    return add_status(0, {:view_id => ma.id})
   end
 
   # Get setting
@@ -282,14 +282,14 @@ class Vault < Sinatra::Application
     return add_status(0, {:id => workspace_id, :name => w.name, :settings => w.settings})
   end
 
-  # Get memory for a workspace
-  get('/workspaces/:workspace_id/memories') do |workspace_id|
+  # Get view for a workspace
+  get('/workspaces/:workspace_id/views') do |workspace_id|
     w = Workspace.find(workspace_id)
 
-    return add_status(0, {:memories => w.memories.all().as_json() })
+    return add_status(0, {:views => w.views.all().as_json() })
   end
 
-  def memory_response(ma, params, p = {})
+  def view_response(ma, params, p = {})
     starting = (params['starting'] || ma.starting_revision || 0).to_i()
 
     if(p[:only_nodes])
@@ -297,12 +297,12 @@ class Vault < Sinatra::Application
     elsif(p[:only_segments])
       return {:revision => ma.revision(), :segments => ma.segments(starting)}
     else
-      return {:revision => ma.revision(), :memory => ma.state(starting)}
+      return {:revision => ma.revision(), :view => ma.state(starting)}
     end
   end
 
-  post('/memory/:memory_id/new_segment') do |memory_id|
-    ma = Memory.find(memory_id)
+  post('/view/:view_id/new_segment') do |view_id|
+    ma = View.find(view_id)
 
     body = JSON.parse(request.body.read, :symbolize_names => true)
     if(body[:segment].nil?)
@@ -326,11 +326,11 @@ class Vault < Sinatra::Application
     end
     ma.save()
 
-    return add_status(0, memory_response(ma, params))
+    return add_status(0, view_response(ma, params))
   end
 
-  post('/memory/:memory_id/delete_segment') do |memory_id|
-    ma = Memory.find(memory_id)
+  post('/view/:view_id/delete_segment') do |view_id|
+    ma = View.find(view_id)
     segments = JSON.parse(params['segment'], :symbolize_names => true)
 
     # If it's just a string, make it into an array
@@ -349,11 +349,11 @@ class Vault < Sinatra::Application
     end
     ma.save()
 
-    return add_status(0, memory_response(ma, params))
+    return add_status(0, view_response(ma, params))
   end
 
-  post('/memory/:memory_id/new_node') do |memory_id|
-    ma = Memory.find(memory_id)
+  post('/view/:view_id/new_node') do |view_id|
+    ma = View.find(view_id)
 
     body = JSON.parse(request.body.read, :symbolize_names => true)
     if(body[:node].nil?)
@@ -373,11 +373,11 @@ class Vault < Sinatra::Application
     end
     ma.save()
 
-    return add_status(0, memory_response(ma, params))
+    return add_status(0, view_response(ma, params))
   end
 
-  post('/memory/:memory_id/delete_node') do |memory_id|
-    ma = Memory.find(memory_id)
+  post('/view/:view_id/delete_node') do |view_id|
+    ma = View.find(view_id)
     nodes = JSON.parse(params['node'], :symbolize_names => true)
 
     # If it's just a string, make it into an array
@@ -399,48 +399,48 @@ class Vault < Sinatra::Application
     end
     ma.save()
 
-    return add_status(0, memory_response(ma, params))
+    return add_status(0, view_response(ma, params))
   end
 
   #puts m.do_delta(ma.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
 
-  post('/memory/:memory_id/undo') do |memory_id|
-    ma = Memory.find(memory_id)
+  post('/view/:view_id/undo') do |view_id|
+    ma = View.find(view_id)
     ma.undo()
     ma.save()
 
-    return add_status(0, memory_response(ma, params))
+    return add_status(0, view_response(ma, params))
   end
 
-  # Find memory
-  get('/memory/:memory_id') do |memory_id|
-    ma = Memory.find(memory_id)
+  # Find view
+  get('/view/:view_id') do |view_id|
+    ma = View.find(view_id)
 
-    return add_status(0, memory_response(ma, params))
+    return add_status(0, view_response(ma, params))
   end
 
-  get('/memory/:memory_id/segments') do |memory_id|
-    ma = Memory.find(memory_id)
+  get('/view/:view_id/segments') do |view_id|
+    ma = View.find(view_id)
 
-    return add_status(0, memory_response(ma, params, :only_segments => true))
+    return add_status(0, view_response(ma, params, :only_segments => true))
   end
 
-  get('/memory/:memory_id/nodes') do |memory_id|
-    ma = Memory.find(memory_id)
+  get('/view/:view_id/nodes') do |view_id|
+    ma = View.find(view_id)
 
-    return add_status(0, memory_response(ma, params, :only_nodes => true))
+    return add_status(0, view_response(ma, params, :only_nodes => true))
   end
 
-  delete('/memory/:memory_id') do |memory_id|
-    b = Memory.find(memory_id)
+  delete('/view/:view_id') do |view_id|
+    b = View.find(view_id)
     b.destroy()
 
     return add_status(0, {})
   end
 
   # TODO: This is testing only
-  get('/memory/:memory_id/clear') do |memory_id|
-    ma = Memory.find(memory_id)
+  get('/view/:view_id/clear') do |view_id|
+    ma = View.find(view_id)
     ma.deltas = []
     ma.undo_buffer = []
     ma.redo_buffer = []

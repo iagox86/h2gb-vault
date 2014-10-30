@@ -1,0 +1,2 @@
+- Make IDs unguessable (UUIDs or whatever)
+- Clean up the "find" returns - currently I manually create the hash, I should automate that

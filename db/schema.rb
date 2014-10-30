@@ -21,7 +21,7 @@ ActiveRecord::Schema.define(version: 20140920215248) do
     t.datetime "updated_at"
   end
 
-  create_table "memories", force: true do |t|
+  create_table "views", force: true do |t|
     t.integer  "workspace_id"
     t.string   "name"
     t.text     "deltas"

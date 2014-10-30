@@ -1,11 +1,11 @@
-# memory.rb
+# view.rb
 # By Ron Bowes
 # Created October 6, 2014
 
 require 'json'
 require 'sinatra/activerecord'
 
-if(ARGV[0] == "testmemory")
+if(ARGV[0] == "testview")
   ActiveRecord::Base.establish_connection(
     :adapter => 'sqlite3',
     :host    => nil,
@@ -16,10 +16,10 @@ if(ARGV[0] == "testmemory")
   )
 end
 
-class MemoryException < StandardError
+class ViewException < StandardError
 end
 
-class Memory < ActiveRecord::Base
+class View < ActiveRecord::Base
   DELTA_CHECKPOINT     = 'checkpoint'
   DELTA_CREATE_SEGMENT = 'create_segment'
   DELTA_DELETE_SEGMENT = 'delete_segment'
@@ -37,7 +37,7 @@ class Memory < ActiveRecord::Base
 
   # NOTE: If adding any fields to these, the take_snapshot() function has to be
   # updated as well
-  def init_memory()
+  def init()
     if(self.snapshot)
       puts("We have a snapshot to load!")
 
@@ -58,7 +58,7 @@ class Memory < ActiveRecord::Base
 
     super(params)
 
-    init_memory()
+    init()
     @starting_revision = 0
   end
 
@@ -100,7 +100,7 @@ class Memory < ActiveRecord::Base
     node[:address].upto(node[:address] + node[:length] - 1) do |addr|
       # There's no memory
       if(@memory[addr].nil?)
-        raise(MemoryException, "Tried to create a node where no memory is mounted")
+        raise(ViewException, "Tried to create a node where no memory is mounted")
       end
     end
 
@@ -131,12 +131,12 @@ class Memory < ActiveRecord::Base
   def create_segment(segment)
     # TODO: If you create a segment, undo, then create it again, this will fail. Should it?
     if(!@segments[segment[:name]].nil?)
-      raise(MemoryException, "That segment name is already in use!")
+      raise(ViewException, "That segment name is already in use!")
     end
     # Make sure the memory isn't already in use
     memory = @memory[segment[:address], segment[:data].length()]
     if(!(memory.nil? || memory.compact().length() == 0))
-      raise(MemoryException, "Tried to mount overlapping segments!")
+      raise(ViewException, "Tried to mount overlapping segments!")
     end
 
     # Keep track of the segment
@@ -305,7 +305,7 @@ class Memory < ActiveRecord::Base
       self.redo_buffer << d
 
       # If it's a checkpoint, break out
-      if(d[:type] == Memory::DELTA_CHECKPOINT)
+      if(d[:type] == View::DELTA_CHECKPOINT)
         break
       end
     end
@@ -338,7 +338,7 @@ class Memory < ActiveRecord::Base
       self.undo_buffer << d
 
       # If it's a checkpoint, break out
-      if(d[:type] == Memory::DELTA_CHECKPOINT)
+      if(d[:type] == View::DELTA_CHECKPOINT)
         break
       end
     end
@@ -371,23 +371,23 @@ class Memory < ActiveRecord::Base
     end
 
     case delta[:type]
-    when Memory::DELTA_CHECKPOINT
+    when View::DELTA_CHECKPOINT
       # do nothing
       puts("DOING: checkpoint")
-    when Memory::DELTA_CREATE_NODE
+    when View::DELTA_CREATE_NODE
       puts("DOING: create_node(#{delta[:details]})")
       create_node(delta[:details])
-    when Memory::DELTA_DELETE_NODE
+    when View::DELTA_DELETE_NODE
       puts("DOING: delete_node(#{delta[:details]})")
       delete_node(delta[:details])
-    when Memory::DELTA_CREATE_SEGMENT
+    when View::DELTA_CREATE_SEGMENT
       puts("DOING: create_segment(#{delta[:details]})")
       create_segment(delta[:details])
-    when Memory::DELTA_DELETE_SEGMENT
+    when View::DELTA_DELETE_SEGMENT
       puts("DOING: delete_segment(#{delta[:details]})")
       delete_segment(delta[:details])
     else
-      raise(MemoryException, "Unknown delta: #{delta}")
+      raise(ViewException, "Unknown delta: #{delta}")
     end
 
     # Take a snapshot
@@ -414,50 +414,50 @@ class Memory < ActiveRecord::Base
   end
 
   def create_checkpoint_delta()
-    return { :type => Memory::DELTA_CHECKPOINT }
+    return { :type => View::DELTA_CHECKPOINT }
   end
 
   def create_node_delta(node)
-    return { :type => Memory::DELTA_CREATE_NODE, :details => node }
+    return { :type => View::DELTA_CREATE_NODE, :details => node }
   end
 
   def delete_node_delta(address)
     overlay = get_overlay_at(address)
     if(overlay.nil?)
-      raise(MemoryException, "Couldn't find any nodes at that address!")
+      raise(ViewException, "Couldn't find any nodes at that address!")
     end
 
     node = overlay[:node]
     if(node.nil?)
-      raise(MemoryException, "Couldn't find any nodes at that address!")
+      raise(ViewException, "Couldn't find any nodes at that address!")
     end
 
-    return { :type => Memory::DELTA_DELETE_NODE, :details => node }
+    return { :type => View::DELTA_DELETE_NODE, :details => node }
   end
 
   def create_segment_delta(segment)
-    return { :type => Memory::DELTA_CREATE_SEGMENT, :details => segment }
+    return { :type => View::DELTA_CREATE_SEGMENT, :details => segment }
   end
 
   def delete_segment_delta(name)
     segment = @segments[name][:segment]
-    return { :type => Memory::DELTA_DELETE_SEGMENT, :details => segment }
+    return { :type => View::DELTA_DELETE_SEGMENT, :details => segment }
   end
 
   def invert_delta(delta)
     case delta[:type]
-    when Memory::DELTA_CHECKPOINT
+    when View::DELTA_CHECKPOINT
       return create_checkpoint_delta()
-    when Memory::DELTA_CREATE_NODE
+    when View::DELTA_CREATE_NODE
       return delete_node_delta(delta[:details][:address])
-    when Memory::DELTA_DELETE_NODE
+    when View::DELTA_DELETE_NODE
       return create_node_delta(delta[:details])
-    when Memory::DELTA_CREATE_SEGMENT
+    when View::DELTA_CREATE_SEGMENT
       return delete_segment_delta(delta[:details][:name])
-    when Memory::DELTA_DELETE_SEGMENT
+    when View::DELTA_DELETE_SEGMENT
       return create_segment_delta(delta[:details])
     else
-      raise(MemoryException, "Unknown delta type: #{delta[:type]}")
+      raise(ViewException, "Unknown delta type: #{delta[:type]}")
     end
   end
 
@@ -487,7 +487,7 @@ class Memory < ActiveRecord::Base
 
   after_find do |c|
     # Initialize the objects we need
-    init_memory()
+    init()
 
     # Set up the starting revision
     @starting_revision = revision()
@@ -495,13 +495,13 @@ class Memory < ActiveRecord::Base
 
   after_create do |c|
     # Initialize the objects we need
-    init_memory()
+    init()
   end
 
 end
 
-if(ARGV[0] == "testmemory")
-  m = Memory.new()
+if(ARGV[0] == "testview")
+  m = View.new()
 
   r = m.revision()
 
@@ -584,7 +584,7 @@ if(ARGV[0] == "testmemory")
   puts("id = #{id}")
   puts()
 
-  other_m = Memory.find(id)
+  other_m = View.find(id)
 
   puts("Loaded from DB:")
   puts(other_m.to_s)
@@ -600,7 +600,7 @@ if(ARGV[0] == "testmemory")
   end
 
   # This will break the REDO chain
-  #puts other_m.do_delta(Memory.create_segment_delta({ :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "\x5b\x5c\xca\xb9\x21\xa1\x65\x71\x53\x9a\x63\xd2\xd4\x5e\x7c\x55"}))
+  #puts other_m.do_delta(View.create_segment_delta({ :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "\x5b\x5c\xca\xb9\x21\xa1\x65\x71\x53\x9a\x63\xd2\xd4\x5e\x7c\x55"}))
 
   loop do
     puts other_m.redo()

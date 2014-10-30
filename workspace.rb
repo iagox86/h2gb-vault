@@ -2,7 +2,7 @@ require 'sinatra/activerecord'
 
 class Workspace < ActiveRecord::Base
   belongs_to :binary
-  has_many :memories
+  has_many :views
   serialize :settings, Hash
 
   def initialize(params = {})
