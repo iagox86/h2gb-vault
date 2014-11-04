@@ -317,11 +317,11 @@ class Vault < Sinatra::Application
     starting = (params['starting'] || ma.starting_revision || 0).to_i()
 
     if(p[:only_nodes])
-      return {:revision => ma.revision(), :nodes => ma.nodes(starting)}
+      return {:id => ma.id, :revision => ma.revision(), :nodes => ma.nodes(starting)}
     elsif(p[:only_segments])
-      return {:revision => ma.revision(), :segments => ma.segments(starting)}
+      return {:id => ma.id, :revision => ma.revision(), :segments => ma.segments(starting)}
     else
-      return {:revision => ma.revision(), :view => ma.state(starting)}
+      return {:id => ma.id, :revision => ma.revision(), :view => ma.state(starting)}
     end
   end
 
