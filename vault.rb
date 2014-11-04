@@ -3,15 +3,11 @@ $LOAD_PATH << File.dirname(__FILE__)
 require 'sinatra'
 require 'sinatra/activerecord'
 
-require 'binary'
-require 'view'
-require 'workspace'
+require 'models/binary'
+require 'models/view'
+require 'models/workspace'
 
-require 'fileutils'
 require 'json'
-require 'tempfile'
-
-require 'pp' # debug
 
 # Database stuff
 ActiveRecord::Base.establish_connection(
@@ -334,7 +330,6 @@ class Vault < Sinatra::Application
 
     body = JSON.parse(request.body.read, :symbolize_names => true)
     if(body[:segment].nil?)
-      pp body
       raise(VaultException, "Required field: 'segment'.")
     end
 
@@ -385,7 +380,6 @@ class Vault < Sinatra::Application
 
     body = JSON.parse(request.body.read, :symbolize_names => true)
     if(body[:node].nil?)
-      pp body
       raise(VaultException, "Required field: 'node'.")
     end
 

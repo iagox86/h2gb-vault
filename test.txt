@@ -1,3 +1,0 @@
-You can process ELF files like this:
-
-curl --data-urlencode file@/bin/grep http://localhost:4567/parse/elf
