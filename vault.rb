@@ -203,6 +203,14 @@ class Vault < Sinatra::Application
     return add_status(0, {:workspaces => b.workspaces.all().as_json() })
   end
 
+  # Get info about a workspace
+  get('/workspaces/:workspace_id') do |workspace_id|
+    w = Workspace.find(workspace_id)
+
+    return add_status(0, {:id => workspace_id, :name => w.name, :settings => w.settings})
+  end
+
+
   # Update workspace
   put('/workspaces/:workspace_id') do |workspace_id|
     body = JSON.parse(request.body.read, :symbolize_names => true)
@@ -212,6 +220,13 @@ class Vault < Sinatra::Application
     w.save()
 
     return add_status(0, {:id => w.id, :name => w.name, :settings => w.settings})
+  end
+
+  delete('/workspaces/:workspace_id') do |workspace_id|
+    w = Workspace.find(workspace_id)
+    w.destroy()
+
+    return add_status(0, {})
   end
 
   # Get setting
@@ -258,20 +273,6 @@ class Vault < Sinatra::Application
     return add_status(0, {})
   end
 
-  delete('/workspaces/:workspace_id') do |workspace_id|
-    w = Workspace.find(workspace_id)
-    w.destroy()
-
-    return add_status(0, {})
-  end
-
-  # Get info about a workspace
-  get('/workspaces/:workspace_id') do |workspace_id|
-    w = Workspace.find(workspace_id)
-
-    return add_status(0, {:id => workspace_id, :name => w.name, :settings => w.settings})
-  end
-
   # Create view
   post('/workspaces/:workspace_id/new_view') do |workspace_id|
     w = Workspace.find(workspace_id)
@@ -289,6 +290,33 @@ class Vault < Sinatra::Application
     return add_status(0, {:views => w.views.all().as_json() })
   end
 
+  # Find view
+  get('/views/:view_id') do |view_id|
+    ma = View.find(view_id)
+
+    return add_status(0, view_response(ma, params))
+  end
+
+  # Update view
+  put('/views/:view_id') do |view_id|
+    body = JSON.parse(request.body.read, :symbolize_names => true)
+
+    v = view.find(view_id)
+    v.name = body[:name]
+    v.save()
+
+    return add_status(0, {:id => w.id, :name => w.name})
+  end
+
+  # Delete view
+  delete('/views/:view_id') do |view_id|
+    b = View.find(view_id)
+    b.destroy()
+
+    return add_status(0, {})
+  end
+
+  # TODO: This should be moved into the View class
   def view_response(ma, params, p = {})
     starting = (params['starting'] || ma.starting_revision || 0).to_i()
 
@@ -301,7 +329,7 @@ class Vault < Sinatra::Application
     end
   end
 
-  post('/view/:view_id/new_segment') do |view_id|
+  post('/views/:view_id/new_segment') do |view_id|
     ma = View.find(view_id)
 
     body = JSON.parse(request.body.read, :symbolize_names => true)
@@ -329,7 +357,7 @@ class Vault < Sinatra::Application
     return add_status(0, view_response(ma, params))
   end
 
-  post('/view/:view_id/delete_segment') do |view_id|
+  post('/views/:view_id/delete_segment') do |view_id|
     ma = View.find(view_id)
     segments = JSON.parse(params['segment'], :symbolize_names => true)
 
@@ -352,7 +380,7 @@ class Vault < Sinatra::Application
     return add_status(0, view_response(ma, params))
   end
 
-  post('/view/:view_id/new_node') do |view_id|
+  post('/views/:view_id/new_node') do |view_id|
     ma = View.find(view_id)
 
     body = JSON.parse(request.body.read, :symbolize_names => true)
@@ -376,7 +404,7 @@ class Vault < Sinatra::Application
     return add_status(0, view_response(ma, params))
   end
 
-  post('/view/:view_id/delete_node') do |view_id|
+  post('/views/:view_id/delete_node') do |view_id|
     ma = View.find(view_id)
     nodes = JSON.parse(params['node'], :symbolize_names => true)
 
@@ -404,7 +432,7 @@ class Vault < Sinatra::Application
 
   #puts m.do_delta(ma.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
 
-  post('/view/:view_id/undo') do |view_id|
+  post('/views/:view_id/undo') do |view_id|
     ma = View.find(view_id)
     ma.undo()
     ma.save()
@@ -412,34 +440,20 @@ class Vault < Sinatra::Application
     return add_status(0, view_response(ma, params))
   end
 
-  # Find view
-  get('/view/:view_id') do |view_id|
-    ma = View.find(view_id)
-
-    return add_status(0, view_response(ma, params))
-  end
-
-  get('/view/:view_id/segments') do |view_id|
+  get('/views/:view_id/segments') do |view_id|
     ma = View.find(view_id)
 
     return add_status(0, view_response(ma, params, :only_segments => true))
   end
 
-  get('/view/:view_id/nodes') do |view_id|
+  get('/views/:view_id/nodes') do |view_id|
     ma = View.find(view_id)
 
     return add_status(0, view_response(ma, params, :only_nodes => true))
   end
 
-  delete('/view/:view_id') do |view_id|
-    b = View.find(view_id)
-    b.destroy()
-
-    return add_status(0, {})
-  end
-
   # TODO: This is testing only
-  get('/view/:view_id/clear') do |view_id|
+  get('/views/:view_id/clear') do |view_id|
     ma = View.find(view_id)
     ma.deltas = []
     ma.undo_buffer = []
