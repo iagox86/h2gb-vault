@@ -1,9 +1,16 @@
+# workspace.rb
+# Created November 4, 2014
+# By Ron Bowes
+
+require 'model'
 require 'sinatra/activerecord'
 
 class Workspace < ActiveRecord::Base
-  belongs_to :binary
-  has_many :views
-  serialize :settings, Hash
+  include Model
+
+  belongs_to(:binary)
+  has_many(:views)
+  serialize(:settings, Hash)
 
   def initialize(params = {})
     if(params[:settings].nil?)

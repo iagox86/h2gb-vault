@@ -1,5 +1,7 @@
 $LOAD_PATH << File.dirname(__FILE__)
 
+require 'model'
+
 require 'sinatra'
 require 'sinatra/activerecord'
 
@@ -7,6 +9,7 @@ require 'securerandom'
 
 class Binary < ActiveRecord::Base
   attr_accessor :data
+  include Model
 
   # Because I'm using UUIDs for the primary key, this needs to be defined
 #  self.primary_key = :id

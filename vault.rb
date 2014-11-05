@@ -134,7 +134,7 @@ class Vault < Sinatra::Application
     b.save()
 
     return add_status(0, {
-      :id         => b.id,
+      :binary_id  => b.id,
       :name       => b.name,
       :comment    => b.comment,
       :data       => Base64.encode64(b.data),
@@ -142,6 +142,7 @@ class Vault < Sinatra::Application
   end
 
   # List binaries (note: doesn't return file contents)
+  # TODO: This should return :binary_id properly
   get('/binaries') do
     return add_status(0, {:binaries => Binary.all().as_json() })
   end
@@ -150,7 +151,7 @@ class Vault < Sinatra::Application
   get('/binaries/:binary_id') do |binary_id|
     b = Binary.find(binary_id)
     return add_status(0, {
-      :id         => b.id,
+      :binary_id  => b.id,
       :name       => b.name,
       :comment    => b.comment,
       :data       => Base64.encode64(b.data),
@@ -168,7 +169,7 @@ class Vault < Sinatra::Application
     b.save()
 
     return add_status(0, {
-      :id         => b.id,
+      :binary_id  => b.id,
       :name       => b.name,
       :comment    => b.comment,
       :data       => Base64.encode64(b.data),
@@ -190,12 +191,17 @@ class Vault < Sinatra::Application
     w = b.workspaces.new(:name => body[:name])
     w.save()
 
-    return add_status(0, {:id => w.id, :name => w.name, :settings => w.settings})
+    return add_status(0, {
+      :workspace_id => w.id,
+      :name         => w.name,
+      :settings     => w.settings
+    })
   end
 
   get('/binaries/:binary_id/workspaces') do |binary_id|
     b = Binary.find(binary_id)
 
+    # TODO: Fix the 'id'
     return add_status(0, {:workspaces => b.workspaces.all().as_json() })
   end
 
@@ -203,9 +209,12 @@ class Vault < Sinatra::Application
   get('/workspaces/:workspace_id') do |workspace_id|
     w = Workspace.find(workspace_id)
 
-    return add_status(0, {:id => workspace_id, :name => w.name, :settings => w.settings})
+    return add_status(0, {
+      :workspace_id => w.id,
+      :name         => w.name,
+      :settings     => w.settings
+    })
   end
-
 
   # Update workspace
   put('/workspaces/:workspace_id') do |workspace_id|
@@ -215,7 +224,11 @@ class Vault < Sinatra::Application
     w.name = body[:name]
     w.save()
 
-    return add_status(0, {:id => w.id, :name => w.name, :settings => w.settings})
+    return add_status(0, {
+      :workspace_id => w.id,
+      :name         => w.name,
+      :settings     => w.settings
+    })
   end
 
   delete('/workspaces/:workspace_id') do |workspace_id|
@@ -230,6 +243,7 @@ class Vault < Sinatra::Application
     w = Workspace.find(workspace_id)
     name = params['name']
 
+    # TODO: Rename this to key/value to be less confusing
     return add_status(0, {:name => name, :value => w.get(name)})
   end
 
@@ -294,6 +308,7 @@ class Vault < Sinatra::Application
   end
 
   # Update view
+  # TODO: Make sure this is being tested
   put('/views/:view_id') do |view_id|
     body = JSON.parse(request.body.read, :symbolize_names => true)
 
@@ -301,7 +316,7 @@ class Vault < Sinatra::Application
     v.name = body[:name]
     v.save()
 
-    return add_status(0, {:id => w.id, :name => w.name})
+    return add_status(0, {:view_id => v.id, :name => v.name})
   end
 
   # Delete view
@@ -317,11 +332,11 @@ class Vault < Sinatra::Application
     starting = (params['starting'] || ma.starting_revision || 0).to_i()
 
     if(p[:only_nodes])
-      return {:id => ma.id, :revision => ma.revision(), :nodes => ma.nodes(starting)}
+      return {:view_id => ma.id, :revision => ma.revision(), :nodes => ma.nodes(starting)}
     elsif(p[:only_segments])
-      return {:id => ma.id, :revision => ma.revision(), :segments => ma.segments(starting)}
+      return {:view_id => ma.id, :revision => ma.revision(), :segments => ma.segments(starting)}
     else
-      return {:id => ma.id, :revision => ma.revision(), :view => ma.state(starting)}
+      return {:view_id => ma.id, :revision => ma.revision(), :view => ma.state(starting)}
     end
   end
 

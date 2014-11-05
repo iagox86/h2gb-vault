@@ -2,6 +2,8 @@
 # By Ron Bowes
 # Created October 6, 2014
 
+require 'model'
+
 require 'json'
 require 'sinatra/activerecord'
 
@@ -20,20 +22,22 @@ class ViewException < StandardError
 end
 
 class View < ActiveRecord::Base
-  DELTA_CHECKPOINT     = 'checkpoint'
-  DELTA_CREATE_SEGMENT = 'create_segment'
-  DELTA_DELETE_SEGMENT = 'delete_segment'
-  DELTA_CREATE_NODE    = 'create_node'
-  DELTA_DELETE_NODE    = 'delete_node'
+  include Model
+
+  belongs_to(:workspace)
 
   serialize(:deltas)
   serialize(:undo_buffer)
   serialize(:redo_buffer)
   serialize(:snapshot)
 
-  attr_reader :starting_revision
+  DELTA_CHECKPOINT     = 'checkpoint'
+  DELTA_CREATE_SEGMENT = 'create_segment'
+  DELTA_DELETE_SEGMENT = 'delete_segment'
+  DELTA_CREATE_NODE    = 'create_node'
+  DELTA_DELETE_NODE    = 'delete_node'
 
-  self.belongs_to(:workspace)
+  attr_reader :starting_revision
 
   # NOTE: If adding any fields to these, the take_snapshot() function has to be
   # updated as well
