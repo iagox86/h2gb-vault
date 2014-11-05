@@ -133,19 +133,19 @@ class Vault < Sinatra::Application
     )
     b.save()
 
-    return b.to_json(true)
+    return b.to_json()
   end
 
   # List binaries (note: doesn't return file contents)
   # TODO: This should return :binary_id properly
   get('/binaries') do
-    return add_status(0, {:binaries => Binary.all_to_json() })
+    return {:binaries => Binary.all_to_json() }
   end
 
   # Download a binary
   get('/binaries/:binary_id') do |binary_id|
     b = Binary.find(binary_id)
-    return b.to_json(true)
+    return b.to_json()
   end
 
   # Update binary
@@ -158,7 +158,7 @@ class Vault < Sinatra::Application
     b.data = Base64.decode64(body[:data])
     b.save()
 
-    return b.to_json(true)
+    return b.to_json()
   end
 
   # Delete binary
@@ -176,29 +176,20 @@ class Vault < Sinatra::Application
     w = b.workspaces.new(:name => body[:name])
     w.save()
 
-    return add_status(0, {
-      :workspace_id => w.id,
-      :name         => w.name,
-      :settings     => w.settings
-    })
+    return w.to_json()
   end
 
   get('/binaries/:binary_id/workspaces') do |binary_id|
     b = Binary.find(binary_id)
 
-    # TODO: Fix the 'id'
-    return add_status(0, {:workspaces => b.workspaces.all().as_json() })
+    return {:workspaces => Workspace.all_to_json(b.workspaces.all()) }
   end
 
   # Get info about a workspace
   get('/workspaces/:workspace_id') do |workspace_id|
     w = Workspace.find(workspace_id)
 
-    return add_status(0, {
-      :workspace_id => w.id,
-      :name         => w.name,
-      :settings     => w.settings
-    })
+    return w.to_json()
   end
 
   # Update workspace
@@ -209,18 +200,14 @@ class Vault < Sinatra::Application
     w.name = body[:name]
     w.save()
 
-    return add_status(0, {
-      :workspace_id => w.id,
-      :name         => w.name,
-      :settings     => w.settings
-    })
+    return w.to_json()
   end
 
   delete('/workspaces/:workspace_id') do |workspace_id|
     w = Workspace.find(workspace_id)
     w.destroy()
 
-    return add_status(0, {})
+    return {:deleted => true}
   end
 
   # Get setting

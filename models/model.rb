@@ -18,10 +18,10 @@ module Model
 
   # These methods are statically added to the 'model' classes
   module ModelStatic
-    def all_to_json(detailed = false)
+    def all_to_json(all = all(), detailed = false)
       result = []
 
-      all().each do |b|
+      all.each do |b|
         result << b.to_json(detailed)
       end
 

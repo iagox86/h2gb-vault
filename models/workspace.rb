@@ -26,4 +26,12 @@ class Workspace < ActiveRecord::Base
   def get(name)
     return self.settings[name]
   end
+
+  def to_json(detailed = true)
+    return {
+      :workspace_id => self.id,
+      :name         => self.name,
+      :settings     => self.settings
+    }
+  end
 end
