@@ -8,7 +8,7 @@ require 'sinatra/activerecord'
 require 'securerandom'
 
 module Model
-  def dump()
+  def to_json(detailed = false)
     raise(NotImplementedException, "dump() needs to be overridden!")
   end
 end

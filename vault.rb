@@ -133,12 +133,7 @@ class Vault < Sinatra::Application
     )
     b.save()
 
-    return add_status(0, {
-      :binary_id  => b.id,
-      :name       => b.name,
-      :comment    => b.comment,
-      :data       => Base64.encode64(b.data),
-    })
+    return b.to_json(true)
   end
 
   # List binaries (note: doesn't return file contents)
@@ -150,12 +145,7 @@ class Vault < Sinatra::Application
   # Download a binary
   get('/binaries/:binary_id') do |binary_id|
     b = Binary.find(binary_id)
-    return add_status(0, {
-      :binary_id  => b.id,
-      :name       => b.name,
-      :comment    => b.comment,
-      :data       => Base64.encode64(b.data),
-    })
+    return b.to_json(true)
   end
 
   # Update binary
@@ -168,12 +158,7 @@ class Vault < Sinatra::Application
     b.data = Base64.decode64(body[:data])
     b.save()
 
-    return add_status(0, {
-      :binary_id  => b.id,
-      :name       => b.name,
-      :comment    => b.comment,
-      :data       => Base64.encode64(b.data),
-    })
+    return b.to_json(true)
   end
 
   # Delete binary
@@ -181,7 +166,7 @@ class Vault < Sinatra::Application
     b = Binary.find(binary_id)
     b.destroy()
 
-    return add_status(0, {})
+    return {:deleted => true}
   end
 
   post('/binaries/:binary_id/new_workspace') do |binary_id|

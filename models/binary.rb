@@ -71,4 +71,18 @@ class Binary < ActiveRecord::Base
       return "raw"
     end
   end
+
+  def to_json(detailed = false)
+    result = {
+      :binary_id  => self.id,
+      :name       => self.name,
+      :comment    => self.comment,
+    }
+
+    if(detailed)
+      result[:data] = Base64.encode64(self.data)
+    end
+
+    return result
+  end
 end
