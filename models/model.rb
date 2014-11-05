@@ -18,12 +18,9 @@ module Model
 
   # These methods are statically added to the 'model' classes
   module ModelStatic
-    def all_to_json(all = all(), params = {})
-      # Default to all()
-      params[:all] ||= all()
-
+    def all_to_json(params = {})
       # Make an array of the json results
-      return params[:all].each.to_a().map() { |entry| entry.to_json() }
+      return (params[:all] || all()).map() { |entry| entry.to_json() }
     end
   end
 end
