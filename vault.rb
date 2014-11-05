@@ -139,7 +139,7 @@ class Vault < Sinatra::Application
   # List binaries (note: doesn't return file contents)
   # TODO: This should return :binary_id properly
   get('/binaries') do
-    return {:binaries => Binary.all_to_json() }
+    return {:binaries => Binary.all_to_json(:skip_data => true) }
   end
 
   # Download a binary
@@ -182,7 +182,7 @@ class Vault < Sinatra::Application
   get('/binaries/:binary_id/workspaces') do |binary_id|
     b = Binary.find(binary_id)
 
-    return {:workspaces => Workspace.all_to_json(b.workspaces.all()) }
+    return {:workspaces => Workspace.all_to_json(:all => b.workspaces.all()) }
   end
 
   # Get info about a workspace

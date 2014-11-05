@@ -489,6 +489,18 @@ class View < ActiveRecord::Base
     return s
   end
 
+#  def to_json(ma, params, p = {})
+#    starting = (params['starting'] || ma.starting_revision || 0).to_i()
+#
+#    if(p[:only_nodes])
+#      return {:view_id => ma.id, :revision => ma.revision(), :nodes => ma.nodes(starting)}
+#    elsif(p[:only_segments])
+#      return {:view_id => ma.id, :revision => ma.revision(), :segments => ma.segments(starting)}
+#    else
+#      return {:view_id => ma.id, :revision => ma.revision(), :view => ma.state(starting)}
+#    end
+#  end
+
   after_find do |c|
     # Initialize the objects we need
     init()

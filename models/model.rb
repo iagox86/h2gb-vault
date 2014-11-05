@@ -12,20 +12,18 @@ module Model
     o.extend(ModelStatic)
   end
 
-  def to_json(detailed = true)
+  def to_json(params = {})
     raise(NotImplementedException, "dump() needs to be overridden!")
   end
 
   # These methods are statically added to the 'model' classes
   module ModelStatic
-    def all_to_json(all = all(), detailed = false)
-      result = []
+    def all_to_json(all = all(), params = {})
+      # Default to all()
+      params[:all] ||= all()
 
-      all.each do |b|
-        result << b.to_json(detailed)
-      end
-
-      return result
+      # Make an array of the json results
+      return params[:all].each.to_a().map() { |entry| entry.to_json() }
     end
   end
 end
