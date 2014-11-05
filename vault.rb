@@ -139,7 +139,7 @@ class Vault < Sinatra::Application
   # List binaries (note: doesn't return file contents)
   # TODO: This should return :binary_id properly
   get('/binaries') do
-    return add_status(0, {:binaries => Binary.all().as_json() })
+    return add_status(0, {:binaries => Binary.all_to_json() })
   end
 
   # Download a binary

@@ -72,7 +72,7 @@ class Binary < ActiveRecord::Base
     end
   end
 
-  def to_json(detailed = false)
+  def to_json(detailed = true)
     result = {
       :binary_id  => self.id,
       :name       => self.name,

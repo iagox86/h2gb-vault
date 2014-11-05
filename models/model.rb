@@ -8,7 +8,24 @@ require 'sinatra/activerecord'
 require 'securerandom'
 
 module Model
-  def to_json(detailed = false)
+  def self.included(o)
+    o.extend(ModelStatic)
+  end
+
+  def to_json(detailed = true)
     raise(NotImplementedException, "dump() needs to be overridden!")
+  end
+
+  # These methods are statically added to the 'model' classes
+  module ModelStatic
+    def all_to_json(detailed = false)
+      result = []
+
+      all().each do |b|
+        result << b.to_json(detailed)
+      end
+
+      return result
+    end
   end
 end
