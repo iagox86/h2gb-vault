@@ -133,7 +133,6 @@ class View < ActiveRecord::Base
   end
 
   def create_segment(segment)
-    # TODO: If you create a segment, undo, then create it again, this will fail. Should it?
     if(!@segments[segment[:name]].nil?)
       raise(ViewException, "That segment name is already in use!")
     end
@@ -171,8 +170,6 @@ class View < ActiveRecord::Base
     end
 
     # Delete it from the segments table
-    # TODO: For some reason, I wanted to keep segments in the table.. I forget why, though
-    #@segments[segment[:name]][:deleted] = revision()
     @segments.delete(segment[:name])
   end
 
