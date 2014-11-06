@@ -137,7 +137,6 @@ class Vault < Sinatra::Application
   end
 
   # List binaries (note: doesn't return file contents)
-  # TODO: This should return :binary_id properly
   get('/binaries') do
     return {:binaries => Binary.all_to_json(:skip_data => true) }
   end
@@ -259,24 +258,24 @@ class Vault < Sinatra::Application
   post('/workspaces/:workspace_id/new_view') do |workspace_id|
     w = Workspace.find(workspace_id)
 
-    ma = w.views.new(:name => params['name'])
-    ma.save()
+    view = w.views.new(:name => params['name'])
+    view.save()
 
-    return add_status(0, {:view_id => ma.id})
+    return view.to_json()
   end
 
   # Get views for a workspace
   get('/workspaces/:workspace_id/views') do |workspace_id|
     w = Workspace.find(workspace_id)
 
-    return add_status(0, {:views => w.views.all().as_json() })
+    return {:views => View.all_to_json(:all => w.views.all()) }
   end
 
   # Find view
   get('/views/:view_id') do |view_id|
-    ma = View.find(view_id)
+    view = View.find(view_id)
 
-    return add_status(0, view_response(ma, params))
+    return view.to_json()
   end
 
   # Update view
@@ -288,32 +287,20 @@ class Vault < Sinatra::Application
     v.name = body[:name]
     v.save()
 
-    return add_status(0, {:view_id => v.id, :name => v.name})
+    return v.to_json()
   end
 
   # Delete view
   delete('/views/:view_id') do |view_id|
+    puts("ID: #{view_id}")
     b = View.find(view_id)
     b.destroy()
 
-    return add_status(0, {})
-  end
-
-  # TODO: This should be moved into the View class
-  def view_response(ma, params, p = {})
-    starting = (params['starting'] || ma.starting_revision || 0).to_i()
-
-    if(p[:only_nodes])
-      return {:view_id => ma.id, :revision => ma.revision(), :nodes => ma.nodes(starting)}
-    elsif(p[:only_segments])
-      return {:view_id => ma.id, :revision => ma.revision(), :segments => ma.segments(starting)}
-    else
-      return {:view_id => ma.id, :revision => ma.revision(), :view => ma.state(starting)}
-    end
+    return {:deleted => true}
   end
 
   post('/views/:view_id/new_segment') do |view_id|
-    ma = View.find(view_id)
+    view = View.find(view_id)
 
     body = JSON.parse(request.body.read, :symbolize_names => true)
     if(body[:segment].nil?)
@@ -332,15 +319,15 @@ class Vault < Sinatra::Application
         raise(VaultException, "Segments require a base64-encoded 'data' field")
       end
       segment[:data] = Base64.decode64(segment[:data])
-      ma.do_delta(ma.create_segment_delta(segment))
+      view.do_delta(view.create_segment_delta(segment))
     end
-    ma.save()
+    view.save()
 
-    return add_status(0, view_response(ma, params))
+    return view.to_json(params)
   end
 
   post('/views/:view_id/delete_segment') do |view_id|
-    ma = View.find(view_id)
+    view = View.find(view_id)
     segments = JSON.parse(params['segment'], :symbolize_names => true)
 
     # If it's just a string, make it into an array
@@ -355,15 +342,15 @@ class Vault < Sinatra::Application
 
     # Loop through the one or more segments we need to create and do them
     segments.each do |segment|
-      ma.do_delta(ma.delete_segment_delta(segment))
+      view.do_delta(view.delete_segment_delta(segment))
     end
-    ma.save()
+    view.save()
 
-    return add_status(0, view_response(ma, params))
+    return view.to_json(params)
   end
 
   post('/views/:view_id/new_node') do |view_id|
-    ma = View.find(view_id)
+    view = View.find(view_id)
 
     body = JSON.parse(request.body.read, :symbolize_names => true)
     if(body[:node].nil?)
@@ -378,15 +365,15 @@ class Vault < Sinatra::Application
 
     # Loop through the one or more nodes we need to create and do them
     nodes.each do |node|
-      ma.do_delta(ma.create_node_delta(node))
+      view.do_delta(view.create_node_delta(node))
     end
-    ma.save()
+    view.save()
 
-    return add_status(0, view_response(ma, params))
+    return view.to_json(params)
   end
 
   post('/views/:view_id/delete_node') do |view_id|
-    ma = View.find(view_id)
+    view = View.find(view_id)
     nodes = JSON.parse(params['node'], :symbolize_names => true)
 
     # If it's just a string, make it into an array
@@ -404,45 +391,44 @@ class Vault < Sinatra::Application
       if(!node.is_a?(Fixnum))
         raise(VaultException, "delete_node requires a single or an array of addresses as integers")
       end
-      ma.do_delta(ma.delete_node_delta(node))
+      view.do_delta(view.delete_node_delta(node))
     end
-    ma.save()
+    view.save()
 
-    return add_status(0, view_response(ma, params))
+    return view.to_json(params)
   end
 
-  #puts m.do_delta(ma.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
+  #puts m.do_delta(view.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
 
   post('/views/:view_id/undo') do |view_id|
-    ma = View.find(view_id)
-    ma.undo()
-    ma.save()
+    view = View.find(view_id)
+    view.undo()
+    view.save()
 
-    return add_status(0, view_response(ma, params))
+    return view.to_json(params)
   end
 
   get('/views/:view_id/segments') do |view_id|
-    ma = View.find(view_id)
+    view = View.find(view_id)
 
-    return add_status(0, view_response(ma, params, :only_segments => true))
+    return view.to_json(params.merge(:only_segments => true))
   end
 
   get('/views/:view_id/nodes') do |view_id|
-    ma = View.find(view_id)
+    view = View.find(view_id)
 
-    return add_status(0, view_response(ma, params, :only_nodes => true))
+    return view.to_json(params.merge(:only_nodes => true))
   end
 
   # TODO: This is testing only
   get('/views/:view_id/clear') do |view_id|
-    ma = View.find(view_id)
-    ma.deltas = []
-    ma.undo_buffer = []
-    ma.redo_buffer = []
-    ma.save()
+    view = View.find(view_id)
+    view.deltas = []
+    view.undo_buffer = []
+    view.redo_buffer = []
+    view.save()
 
     return add_status(0, {:result => "Done!"})
-
   end
 
   get(/\/static\/([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/) do |file|

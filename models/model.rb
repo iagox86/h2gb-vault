@@ -16,6 +16,10 @@ module Model
     raise(NotImplementedException, "dump() needs to be overridden!")
   end
 
+  def as_json(p = {})
+    raise(Exception, "You probably want to use to_json().")
+  end
+
   # These methods are statically added to the 'model' classes
   module ModelStatic
     def all_to_json(params = {})
