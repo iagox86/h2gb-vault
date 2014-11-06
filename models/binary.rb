@@ -15,7 +15,8 @@ class Binary < ActiveRecord::Base
 #  self.primary_key = :id
   self.has_many(:workspaces)
 
-  UPLOAD_PATH = File.dirname(__FILE__) + "/uploads"
+  # TODO: Fix the upload path
+  UPLOAD_PATH = "/tmp" #File.dirname(__FILE__) + "/uploads"
 
   def initialize(params)
     # Keep track of the 'data' field separately
@@ -32,7 +33,11 @@ class Binary < ActiveRecord::Base
   end
 
   after_find do
-    @data = IO.read(self.filename())
+    begin
+      @data = IO.read(self.filename())
+    rescue StandardError => e
+      raise(StandardError, "There was an error loading the binary's data: #{e}")
+    end
   end
 
   # Overwrite 'save' to save the data to the disk
