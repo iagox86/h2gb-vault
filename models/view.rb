@@ -244,12 +244,6 @@ class View < ActiveRecord::Base
     return self.deltas.length()
   end
 
-  def state(starting = nil)
-    starting ||= 0
-
-    return { :segments => segments(starting), :nodes => nodes(starting) }
-  end
-
   def segments(starting = nil)
     results = []
     each_segment(starting) do |segment|
@@ -285,10 +279,7 @@ class View < ActiveRecord::Base
     return get_bytes_at(addr, 1).ord
   end
 
-  def undo(starting = nil)
-    # Keep track of where we started so we can return just what changed
-    start_revision = revision()
-
+  def undo()
     # Loop till we get to the start or hit a checkpoint
     loop do
       # Get the next thing to undo
@@ -310,16 +301,10 @@ class View < ActiveRecord::Base
         break
       end
     end
-
-    # Return the nodes that changed between the current revision and the the head
-    return state(starting || start_revision)
   end
 
   # Note: this is the exact same as undo(), except with the lists swapped and no inverting
-  def redo(starting = nil)
-    # Keep track of where we started so we can return just what changed
-    start_revision = revision()
-
+  def redo()
     # Loop till we get to the start or hit a checkpoint
     loop do
       # Get the next thing to redo
@@ -343,9 +328,6 @@ class View < ActiveRecord::Base
         break
       end
     end
-
-    # Return the nodes that changed between the current revision and the the head
-    return state(starting || start_revision)
   end
 
   def take_snapshot()
@@ -399,9 +381,6 @@ class View < ActiveRecord::Base
     # Discard any REDO state
     self.redo_buffer.clear
 
-    # Remember which revision we started on so we can send all the changed nodes
-    start_revision = revision()
-
     # Record a checkpoint for 'undo' purposes
     self.undo_buffer << create_checkpoint_delta()
 
@@ -409,9 +388,6 @@ class View < ActiveRecord::Base
     do_delta_internal(delta)
     self.deltas << delta
     self.undo_buffer << delta
-
-    # Return all the nodes since we started
-    return state(starting || start_revision)
   end
 
   def create_checkpoint_delta()
@@ -441,6 +417,10 @@ class View < ActiveRecord::Base
   end
 
   def delete_segment_delta(name)
+    if(@segments[name].nil?)
+      raise(VaultException, "Segment doesn't exist: \"#{name}\" (known segments: #{@segments.keys.map() { |s| "\"" + s + "\""}.join(", ")})")
+    end
+
     segment = @segments[name][:segment]
     return { :type => View::DELTA_DELETE_SEGMENT, :details => segment }
   end
@@ -487,15 +467,74 @@ class View < ActiveRecord::Base
   end
 
   def to_json(params = {})
-    starting = (params[:starting] || self.starting_revision || 0).to_i()
+    starting = (params[:starting] || 0).to_i()
+    skip_nodes = (params[:skip_nodes] == "true")
+    skip_data  = (params[:skip_data]  == "true")
 
-    if(params[:only_nodes])
-      return {:view_id => self.id, :revision => self.revision(), :nodes => self.nodes(starting)}
-    elsif(params[:only_segments])
-      return {:view_id => self.id, :revision => self.revision(), :segments => self.segments(starting)}
-    else
-      return {:view_id => self.id, :revision => self.revision(), :view => self.state(starting)}
+    puts(params.inspect)
+
+    result = {
+      :view_id  => self.id,
+      :revision => self.revision(),
+      :segments => [],
+    }
+
+    # Ensure the names argument is always an array
+    if(params[:names] && params[:names].is_a?(String))
+      params[:names] = [params[:names]]
     end
+
+    # I want all segments, because it's possible that a node inside a segment matters
+    # TODO: When I update a node, also update the segment's revision
+    each_segment(nil) do |segment|
+
+      # Start at the beginning of the segment
+      addr = segment[:segment][:address]
+
+      # If the user wanted a specific node 
+      if(params[:names] && !params[:names].include?(segment[:segment][:name]))
+        next
+      end
+
+      # The entry for this segment
+      s = {
+        :name     => segment[:segment][:name],
+        :nodes    => [],
+        :revision => segment[:revision]
+      }
+
+      # Don't include the data if the requester doesn't want it
+      if(skip_data != true)
+        s[:data] = Base64.encode64(segment[:segment][:data])
+      end
+
+      # Let the user skip including nodes
+      if(skip_nodes != true)
+        # Loop through the entire segment
+        while(addr < segment[:segment][:address] + segment[:segment][:data].length()) do
+          # Get the overlay for this node
+          overlay = get_overlay_at(addr)
+          if(overlay.nil?)
+            raise(VaultException, "No overlay was defined at 0x%08x.. that shouldn't happen!" % addr)
+          end
+
+          # Check if it's new enough to be included
+          if(overlay[:revision] >= starting)
+            s[:nodes] << overlay
+          end
+
+          addr += overlay[:node][:length]
+        end
+      end
+
+      # Check if this segment should be included
+      if(s[:nodes].length > 0 || s[:revision] >= starting)
+        result[:segments] << s
+      end
+    end
+
+    puts(result.inspect)
+    return result
   end
 
   after_find do |c|

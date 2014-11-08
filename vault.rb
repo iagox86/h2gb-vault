@@ -302,13 +302,9 @@ class Vault < Sinatra::Application
   post('/views/:view_id/new_segment') do |view_id|
     view = View.find(view_id)
 
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-    if(body[:segment].nil?)
-      raise(VaultException, "Required field: 'segment'.")
-    end
+    segments = JSON.parse(request.body.read, :symbolize_names => true)
 
     # Make sure it's an array
-    segments = body[:segment]
     if(segments.is_a?(Hash))
       segments = [segments]
     end
@@ -328,7 +324,8 @@ class Vault < Sinatra::Application
 
   post('/views/:view_id/delete_segment') do |view_id|
     view = View.find(view_id)
-    segments = JSON.parse(params['segment'], :symbolize_names => true)
+    params = JSON.parse(request.body.read, :symbolize_names => true)
+    segments = params[:segments]
 
     # If it's just a string, make it into an array
     if(segments.is_a?(String))
