@@ -468,10 +468,12 @@ class View < ActiveRecord::Base
 
   def to_json(params = {})
     starting = (params[:starting] || 0).to_i()
-    skip_nodes = (params[:skip_nodes] == "true")
-    skip_data  = (params[:skip_data]  == "true")
+    with_nodes = (params[:with_nodes] == "true")
+    with_data  = (params[:with_data]  == "true")
 
+    puts()
     puts(params.inspect)
+    puts()
 
     result = {
       :name     => self.name,
@@ -505,12 +507,12 @@ class View < ActiveRecord::Base
       }
 
       # Don't include the data if the requester doesn't want it
-      if(skip_data != true)
+      if(with_data == true)
         s[:data] = Base64.encode64(segment[:segment][:data])
       end
 
       # Let the user skip including nodes
-      if(skip_nodes != true)
+      if(with_nodes == true)
         # Loop through the entire segment
         while(addr < segment[:segment][:address] + segment[:segment][:data].length()) do
           # Get the overlay for this node

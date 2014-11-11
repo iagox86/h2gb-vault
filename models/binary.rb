@@ -80,7 +80,7 @@ class Binary < ActiveRecord::Base
       :comment    => self.comment,
     }
 
-    if(params[:skip_data] != true)
+    if(params[:with_data] != true)
       result[:data] = Base64.encode64(self.data)
     end
 
