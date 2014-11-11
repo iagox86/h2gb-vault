@@ -44,10 +44,6 @@ class Binary < ActiveRecord::Base
   def save()
     super()
 
-    puts()
-    puts(self.inspect)
-    puts()
-
     File.open(self.filename, "wb") do |f|
       f.write(@data)
       f.close()

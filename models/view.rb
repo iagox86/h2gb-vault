@@ -474,6 +474,7 @@ class View < ActiveRecord::Base
     puts(params.inspect)
 
     result = {
+      :name     => self.name,
       :view_id  => self.id,
       :revision => self.revision(),
       :segments => [],

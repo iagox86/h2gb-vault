@@ -222,8 +222,6 @@ class Vault < Sinatra::Application
   post('/workspaces/:workspace_id/set') do |workspace_id|
     body = JSON.parse(request.body.read, :symbolize_names => true)
 
-    puts(body.inspect)
-
     w = Workspace.find(workspace_id)
 
     # Make sure it's an array
@@ -246,7 +244,6 @@ class Vault < Sinatra::Application
         raise(VaultException, "The 'set' command requires a hash (or an array of hashes) containing 'name' and 'value' fields")
       end
 
-      puts("Setting %s => %s" % [name, value.to_s])
       w.set(name, value)
     end
     w.save()
@@ -256,9 +253,10 @@ class Vault < Sinatra::Application
 
   # Create view
   post('/workspaces/:workspace_id/new_view') do |workspace_id|
+    body = JSON.parse(request.body.read, :symbolize_names => true)
     w = Workspace.find(workspace_id)
 
-    view = w.views.new(:name => params['name'])
+    view = w.views.new(:name => body[:name])
     view.save()
 
     return view.to_json()
@@ -283,7 +281,7 @@ class Vault < Sinatra::Application
   put('/views/:view_id') do |view_id|
     body = JSON.parse(request.body.read, :symbolize_names => true)
 
-    v = view.find(view_id)
+    v = View.find(view_id)
     v.name = body[:name]
     v.save()
 
@@ -292,7 +290,6 @@ class Vault < Sinatra::Application
 
   # Delete view
   delete('/views/:view_id') do |view_id|
-    puts("ID: #{view_id}")
     b = View.find(view_id)
     b.destroy()
 
@@ -394,8 +391,6 @@ class Vault < Sinatra::Application
 
     return view.to_json(params)
   end
-
-  #puts m.do_delta(view.create_node_delta({ :type => 'dword', :address => 0x1000, :length => 4, :value => "dd 0x41414141", :details => { value: 0x41414141 }, :refs => [0x1004]}))
 
   post('/views/:view_id/undo') do |view_id|
     view = View.find(view_id)
