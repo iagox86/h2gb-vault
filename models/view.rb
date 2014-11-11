@@ -471,10 +471,6 @@ class View < ActiveRecord::Base
     with_nodes = (params[:with_nodes] == "true")
     with_data  = (params[:with_data]  == "true")
 
-    puts()
-    puts(params.inspect)
-    puts()
-
     result = {
       :name     => self.name,
       :view_id  => self.id,
@@ -483,19 +479,20 @@ class View < ActiveRecord::Base
     }
 
     # Ensure the names argument is always an array
-    if(params[:names] && params[:names].is_a?(String))
+    if(params[:names] == '')
+      params[:names] = nil
+    elsif(params[:names] && params[:names].is_a?(String))
       params[:names] = [params[:names]]
     end
 
     # I want all segments, because it's possible that a node inside a segment matters
     # TODO: When I update a node, also update the segment's revision
     each_segment(nil) do |segment|
-
       # Start at the beginning of the segment
       addr = segment[:segment][:address]
 
       # If the user wanted a specific node 
-      if(params[:names] && !params[:names].include?(segment[:segment][:name]))
+      if(!params[:names].nil? && !params[:names].include?(segment[:segment][:name]))
         next
       end
 
@@ -536,7 +533,6 @@ class View < ActiveRecord::Base
       end
     end
 
-    puts(result.inspect)
     return result
   end
 
