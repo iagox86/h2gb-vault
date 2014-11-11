@@ -2,7 +2,9 @@
 # By Ron Bowes
 # Created October 6, 2014
 
-require 'model'
+$LOAD_PATH << File.dirname(__FILE__)
+
+require 'model.rb'
 
 require 'json'
 require 'sinatra/activerecord'

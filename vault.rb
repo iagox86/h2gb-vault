@@ -400,6 +400,14 @@ class Vault < Sinatra::Application
     return view.to_json(params)
   end
 
+  post('/views/:view_id/redo') do |view_id|
+    view = View.find(view_id)
+    view.redo()
+    view.save()
+
+    return view.to_json(params)
+  end
+
   get('/views/:view_id/segments') do |view_id|
     view = View.find(view_id)
 
