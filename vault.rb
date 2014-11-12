@@ -363,7 +363,7 @@ class Vault < Sinatra::Application
     end
     view.save()
 
-    return view.to_json(params)
+    return view.to_json(params.merge({:with_nodes => 'true'}))
   end
 
   post('/views/:view_id/delete_node') do |view_id|

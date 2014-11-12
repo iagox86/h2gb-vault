@@ -501,7 +501,6 @@ class View < ActiveRecord::Base
       # The entry for this segment
       s = {
         :name     => segment[:segment][:name],
-        :nodes    => [],
         :revision => segment[:revision]
       }
 
@@ -512,6 +511,8 @@ class View < ActiveRecord::Base
 
       # Let the user skip including nodes
       if(with_nodes == true)
+        s[:nodes] = []
+
         # Loop through the entire segment
         while(addr < segment[:segment][:address] + segment[:segment][:data].length()) do
           # Get the overlay for this node
@@ -522,7 +523,7 @@ class View < ActiveRecord::Base
 
           # Check if it's new enough to be included
           if(overlay[:revision] >= starting)
-            s[:nodes] << overlay
+            s[:nodes] << overlay.clone.delete(:node).merge(overlay[:node])
           end
 
           addr += overlay[:node][:length]
@@ -530,7 +531,7 @@ class View < ActiveRecord::Base
       end
 
       # Check if this segment should be included
-      if(s[:nodes].length > 0 || s[:revision] >= starting)
+      if((!s[:nodes].nil? && s[:nodes].length > 0) || s[:revision] >= starting)
         result[:segments] << s
       end
     end
