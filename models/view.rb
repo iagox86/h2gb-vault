@@ -113,6 +113,11 @@ class View < ActiveRecord::Base
     # Make sure the nodes are undefined
     undefine(node[:address], node[:length])
 
+    # Make sure the references are arrays
+    if(!node[:refs].is_a?(Array))
+      node[:refs] = [node[:refs]]
+    end
+
     # Save the node to memory
     node[:address].upto(node[:address] + node[:length] - 1) do |addr|
       @overlay[addr][:node] = node
@@ -333,10 +338,6 @@ class View < ActiveRecord::Base
   end
 
   def take_snapshot()
-    puts()
-    puts("** TAKING SNAPSHOT **")
-    puts()
-
     self.snapshot = {
       :segments => @segments,
       :memory   => @memory,
@@ -523,7 +524,10 @@ class View < ActiveRecord::Base
 
           # Check if it's new enough to be included
           if(overlay[:revision] >= starting)
-            s[:nodes] << overlay.clone.delete(:node).merge(overlay[:node])
+            n = overlay.merge(overlay[:node])
+            n.delete(:node)
+
+            s[:nodes] << n
           end
 
           addr += overlay[:node][:length]
