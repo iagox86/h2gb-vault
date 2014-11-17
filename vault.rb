@@ -401,8 +401,11 @@ class Vault < Sinatra::Application
   end
 
   post('/views/:view_id/redo') do |view_id|
+    puts("\nA\n")
     view = View.find(view_id)
+    puts("\nB\n")
     view.redo()
+    puts("\nC\n")
     view.save()
 
     return view.to_json(params)

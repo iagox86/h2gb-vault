@@ -20,10 +20,10 @@ if(ARGV[0] == "testview")
   )
 end
 
-class ViewException < StandardError
+class NuViewException < StandardError
 end
 
-class View < ActiveRecord::Base
+class NuView < ActiveRecord::Base
   include Model
 
   belongs_to(:workspace)
@@ -41,195 +41,230 @@ class View < ActiveRecord::Base
 
   attr_reader :starting_revision
 
-  # NOTE: If adding any fields to these, the take_snapshot() function has to be
-  # updated as well
-  def init()
-    if(self.snapshot)
-      puts("We have a snapshot to load!")
-
-      @segments         = self.snapshot[:segments]
-      @memory           = self.snapshot[:memory]
-      @overlay          = self.snapshot[:overlay]
-    else
-      @segments = {}
-      @memory   = []
-      @overlay  = []
-    end
-  end
-
   def initialize(params = {})
-    params[:deltas]      ||= []
-    params[:undo_buffer] ||= []
-    params[:redo_buffer] ||= []
-
-    super(params)
+    super(params.merge({
+      :deltas      => [],
+      :undo_buffer => [],
+      :redo_buffer => [],
+      :segments    => {},
+      :rev         => 0,
+    }))
 
     init()
     @starting_revision = 0
   end
 
-  def delete_node(node)
-    # Remove the node from the overlay
-    node[:address].upto(node[:address] + node[:length] - 1) do |addr|
-      @overlay[addr][:node] = nil
-      @overlay[addr][:revision] = revision()
+  def revision()
+    self.rev += 1
+
+    return self.rev
+  end
+
+  def create_segments(segments)
+    # Force segments into an array
+    if(!segments.is_a?(Array))
+      segments = [segments]
     end
 
-    # Go through its references, and remove xrefs as necessary
-    if(!node[:refs].nil?)
-      node[:refs].each do |ref|
-        xrefs = @overlay[ref][:xrefs]
-        # It shouldn't ever be nil, but...
-        if(!xrefs.nil?)
-          xrefs.delete(node[:address])
-        end
+    segments.each do |segment|
+      # Do some sanity checks
+      if(segment[:name].nil?)
+        raise(NuViewException, "The 'name' field is required when creating a segment")
+      end
+      if(!self.segments[segment[:name]].nil?)
+        raise(NuViewException, "A segment with that name already exists!")
+      end
+      if(segment[:address].nil?)
+        raise(NuViewException, "The 'address' field is required when creating a segment")
+      end
+      if(segment[:data].nil?)
+        raise(NuViewException, "The 'data' field is required when creating a segment")
+      end
+
+      # Create the 'special' fields
+      segment[:revision] = revision()
+      segment[:nodes]    = {}
+      segment[:xrefs]    = []
+
+      # Store the new segment
+      self.segments[name] = segment
+
+      # Save the opposite into the undo buffer
+      self.undo_buffer << {
+        :type  => :delete_segments,
+        :names => [name],
+      }
+    end
+  end
+
+  def delete_segments(names)
+    # Force names into being an array
+    if(!names.is_a?(Array))
+      names = [names]
+    end
+
+    names.each do |name|
+      segment = self.segments[name]
+      if(segment.nil?)
+        raise(NuViewException, "A segment with that name could not be found!")
+      end
+
+      # Make sure it doesn't have any nodes
+      delete_nodes(name, ((segment[:addr])..(segment[:addr]+segment[:length]-1)).to_a())
+
+      # Officially delete the segment
+      self.segments.delete(name)
+
+      # Save the opposite into the undo buffer
+      self.undo_buffer << {
+        :type => :create_segment,
+        :segments => [segment]
+      }
+    end
+  end
+
+  def create_nodes(segment_name, nodes)
+    # Find the segment
+    segment = self.segments[segment_name]
+    if(segment.nil?)
+      raise(NuViewException, "A segment with that name could not be found!")
+    end
+
+    # Force nodes into being an array
+    if(!nodes.is_a?(Array))
+      nodes = [nodes]
+    end
+
+    # Loop through the nodes
+    nodes.each do |node|
+      # Sanity checks
+      if(node[:type].nil?)
+        raise(NuViewException, "The 'type' field is required!")
+      end
+      if(node[:address].nil?)
+        raise(NuViewException, "The 'address' field is required!")
+      end
+      if(node[:length].nil?)
+        raise(NuViewException, "The 'length' field is required!")
+      end
+      if(node[:value].nil?)
+        raise(NuViewException, "The 'value' field is required!")
+      end
+
+      # Record/update the revisions
+      node[:revision] = revision()
+      segment[:revision] = revision()
+
+      # Loop through all the addresses in the node
+      ((node[:address])..(node[:address]+node[:length]-1)).each do |address|
+        # Make sure the memory we're gonna use is undefined
+        delete_nodes(segment_name, address)
+
+        # Create the segment
+        segment[:nodes][address] = node
+      end
+
+      # TODO: Record Xrefs
+
+      # TODO: Sanity check the address
+
+      # Save the opposite into the undo buffer
+      self.undo_buffer << {
+        :type    => :delete_node,
+        :segment => segment_name,
+        :nodes   => [node],
+      }
+    end
+  end
+
+  def delete_nodes(segment_name, addresses)
+    segment = self.segments[segment_name]
+    if(segment.nil?)
+      raise(NuViewException, "A segment with that name could not be found!")
+    end
+
+    # TODO: Update 'revision' properly
+    addresses.each do |address|
+      if(!segment[:nodes][address].nil?)
+        self.undo_buffer << {
+          :type    => :create_nodes,
+          :segment => :segment_name,
+          :nodes   => segment[:nodes].delete(address)
+        }
       end
     end
   end
 
-  def undefine(addr, len)
-    addr.upto(addr + len - 1) do |a|
-      if(!@overlay[a][:node].nil?)
-        action = delete_node_delta(addr)
-        do_delta_internal(action)
-        self.deltas << action
-        self.undo_buffer << action
-      end
-
-      # Mark this node as recently updated
-      @overlay[a][:revision] = revision()
-    end
-  end
-
-  def create_node(node)
-    # Make sure there's enough room for the entire node
-    node[:address].upto(node[:address] + node[:length] - 1) do |addr|
-      # There's no memory
-      if(@memory[addr].nil?)
-        raise(ViewException, "Tried to create a node where no memory is mounted")
-      end
+  def each_address_in_segment(segment_name)
+    segment = self.segments[segment_name]
+    if(segment.nil?)
+      raise(NuViewException, "A segment with that name could not be found!")
     end
 
-    # Make sure the nodes are undefined
-    undefine(node[:address], node[:length])
-
-    # Make sure the references are arrays
-    if(!node[:refs].is_a?(Array))
-      node[:refs] = [node[:refs]]
-    end
-
-    # Save the node to memory
-    node[:address].upto(node[:address] + node[:length] - 1) do |addr|
-      @overlay[addr][:node] = node
-      @overlay[addr][:revision] = revision()
-    end
-
-    if(!node[:refs].nil?)
-      node[:refs].each do |ref|
-        # Record the cross reference
-        @overlay[ref][:xrefs] ||= []
-        @overlay[ref][:xrefs] << node[:address]
-      end
-    end
-  end
-
-  def each_address_in_segment(segment)
-    segment[:segment][:address].upto(segment[:segment][:address] + segment[:segment][:data].length() - 1) do |addr|
+    segment[:address].upto(segment[:address] + segment[:data].length() - 1) do |addr|
       yield(addr)
     end
   end
 
-  def create_segment(segment)
-    if(!@segments[segment[:name]].nil?)
-      raise(ViewException, "That segment name is already in use!")
-    end
-    # Make sure the memory isn't already in use
-    memory = @memory[segment[:address], segment[:data].length()]
-    if(!(memory.nil? || memory.compact().length() == 0))
-      raise(ViewException, "Tried to mount overlapping segments!")
+  def get_nodes_at(segment_name, addresses)
+    segment = self.segments[segment_name]
+    if(segment.nil?)
+      raise(NuViewException, "A segment with that name could not be found!")
     end
 
-    # Keep track of the segment
-    @segments[segment[:name]] = {
-      :segment => segment,
-      :revision => revision(),
-    }
-
-    # Map the data into memory
-    @memory[segment[:address], segment[:data].length()] = segment[:data].split(//)
-
-    # Create some empty overlays
-    each_address_in_segment(@segments[segment[:name]]) do |addr|
-      @overlay[addr] = { :revision => revision() }
-    end
-  end
-
-  def delete_segment(segment)
-    # Undefine its entire space
-    undefine(segment[:address], segment[:data].length() - 1)
-
-    # Delete the data and the overlay
-    @memory[segment[:address], segment[:data].length()] = [nil] * segment[:data].length()
-
-    # Get rid of the overlays
-    each_address_in_segment(@segments[segment[:name]]) do |addr|
-      @overlay[addr] = nil
+    # Force addresses to be an array
+    if(!addresses.is_a?(Array))
+      addresses = [addresses]
     end
 
-    # Delete it from the segments table
-    @segments.delete(segment[:name])
-  end
+    nodes = {}
+    addresses.each do |address|
+      # Get the node
+      node = segments[:nodes][node]
 
-  def get_overlay_at(addr)
-    memory  = @memory[addr]
-    overlay = @overlay[addr]
-
-    # Make sure we aren't in a weird situation
-    if(memory.nil? && !overlay.nil?)
-      puts("Something bad is happening...")
-      raise Exception
-    end
-
-    # If we aren't in a defined segment, return nil
-    if(memory.nil?)
-      return nil
-    end
-
-    # Start with the basic result
-    result = overlay.clone
-
-    # If we aren't somewhere with an actual node, make a fake one
-    if(overlay[:node].nil?)
-      value = @memory[addr].ord()
-      if(value >= 0x20 && value < 0x7F)
-        value = "<undefined> 0x%02x ; '%c'" % [value, value]
+      if(!node.nil?)
+        # Store it, possibly overwriting other instances of itself
+        nodes[node[:address]] = node.merge({
+          :raw => Base64.encode64(segment[:data][node[:address], node[:length]]),
+        })
       else
-        value = "<undefined> 0x%02x" % value
-      end
-      result[:node] = { :type => "undefined", :address => addr, :length => 1, :value => value, :details => { }}
-    else
-      result[:node] = overlay[:node].clone
-    end
+        # Figure out a nice looking value
+        value = segment[:data][addr].ord()
+        if(value >= 0x20 && value < 0x7F)
+          value = "<undefined> 0x%02x ; '%c'" % [value, value]
+        else
+          value = "<undefined> 0x%02x" % value
+        end
 
-    # Add extra fields that we magically have
-    result[:raw] = Base64.encode64(get_bytes_at(addr, result[:node][:length]))
+        # Make a fake node
+        nodes[node[:address]] = {
+          :type    => "undefined",
+          :address => addr,
+          :length  => 1,
+          :value   => value,
+          :details => { },
+          :raw     => Base64.encode64(segment[:data][address, 1]),
+        }
+      end
+    end
 
     # And that's it!
-    return result
+    return nodes
   end
 
-  def each_segment(starting = nil)
-    @segments.each_value do |segment|
-      if(starting.nil? || segment[:revision] >= starting)
+  def each_segment(names = nil, starting = nil)
+    self.segments.each_pair do |name, segment|
+      if(names.nil? || !names.index(name).nil?)
+        # TODO: Revision numbers
         yield(segment)
       end
     end
   end
 
-  def each_node(starting = nil)
+  def each_node(segment_names = nil, starting = nil)
     # I want to get changed nodes in ALL segments (not just changed segments), so this
     # method call needs to have starting=nil
-    each_segment(nil) do |segment|
+    each_segment(segment_names, 0) do |segment|
       addr = segment[:segment][:address]
 
       while(addr < segment[:segment][:address] + segment[:segment][:data].length()) do
@@ -304,7 +339,7 @@ class View < ActiveRecord::Base
       self.redo_buffer << d
 
       # If it's a checkpoint, break out
-      if(d[:type] == View::DELTA_CHECKPOINT)
+      if(d[:type] == NuView::DELTA_CHECKPOINT)
         break
       end
     end
@@ -336,7 +371,7 @@ class View < ActiveRecord::Base
       self.undo_buffer << d
 
       # If it's a checkpoint, break out
-      if(d[:type] == View::DELTA_CHECKPOINT)
+      if(d[:type] == NuView::DELTA_CHECKPOINT)
         break
       end
     end
@@ -362,23 +397,23 @@ class View < ActiveRecord::Base
     end
 
     case delta[:type]
-    when View::DELTA_CHECKPOINT
+    when NuView::DELTA_CHECKPOINT
       # do nothing
       puts("DOING: checkpoint")
-    when View::DELTA_CREATE_NODE
+    when NuView::DELTA_CREATE_NODE
       puts("DOING: create_node(#{delta[:details]})")
       create_node(delta[:details])
-    when View::DELTA_DELETE_NODE
+    when NuView::DELTA_DELETE_NODE
       puts("DOING: delete_node(#{delta[:details]})")
       delete_node(delta[:details])
-    when View::DELTA_CREATE_SEGMENT
+    when NuView::DELTA_CREATE_SEGMENT
       puts("DOING: create_segment(#{delta[:details]})")
       create_segment(delta[:details])
-    when View::DELTA_DELETE_SEGMENT
+    when NuView::DELTA_DELETE_SEGMENT
       puts("DOING: delete_segment(#{delta[:details]})")
       delete_segment(delta[:details])
     else
-      raise(ViewException, "Unknown delta: #{delta}")
+      raise(NuViewException, "Unknown delta: #{delta}")
     end
 
     # Take a snapshot
@@ -399,29 +434,29 @@ class View < ActiveRecord::Base
   end
 
   def create_checkpoint_delta()
-    return { :type => View::DELTA_CHECKPOINT }
+    return { :type => NuView::DELTA_CHECKPOINT }
   end
 
   def create_node_delta(node)
-    return { :type => View::DELTA_CREATE_NODE, :details => node }
+    return { :type => NuView::DELTA_CREATE_NODE, :details => node }
   end
 
   def delete_node_delta(address)
     overlay = get_overlay_at(address)
     if(overlay.nil?)
-      raise(ViewException, "Couldn't find any nodes at that address!")
+      raise(NuViewException, "Couldn't find any nodes at that address!")
     end
 
     node = overlay[:node]
     if(node.nil?)
-      raise(ViewException, "Couldn't find any nodes at that address!")
+      raise(NuViewException, "Couldn't find any nodes at that address!")
     end
 
-    return { :type => View::DELTA_DELETE_NODE, :details => node }
+    return { :type => NuView::DELTA_DELETE_NODE, :details => node }
   end
 
   def create_segment_delta(segment)
-    return { :type => View::DELTA_CREATE_SEGMENT, :details => segment }
+    return { :type => NuView::DELTA_CREATE_SEGMENT, :details => segment }
   end
 
   def delete_segment_delta(name)
@@ -430,23 +465,23 @@ class View < ActiveRecord::Base
     end
 
     segment = @segments[name][:segment]
-    return { :type => View::DELTA_DELETE_SEGMENT, :details => segment }
+    return { :type => NuView::DELTA_DELETE_SEGMENT, :details => segment }
   end
 
   def invert_delta(delta)
     case delta[:type]
-    when View::DELTA_CHECKPOINT
+    when NuView::DELTA_CHECKPOINT
       return create_checkpoint_delta()
-    when View::DELTA_CREATE_NODE
+    when NuView::DELTA_CREATE_NODE
       return delete_node_delta(delta[:details][:address])
-    when View::DELTA_DELETE_NODE
+    when NuView::DELTA_DELETE_NODE
       return create_node_delta(delta[:details])
-    when View::DELTA_CREATE_SEGMENT
+    when NuView::DELTA_CREATE_SEGMENT
       return delete_segment_delta(delta[:details][:name])
-    when View::DELTA_DELETE_SEGMENT
+    when NuView::DELTA_DELETE_SEGMENT
       return create_segment_delta(delta[:details])
     else
-      raise(ViewException, "Unknown delta type: #{delta[:type]}")
+      raise(NuViewException, "Unknown delta type: #{delta[:type]}")
     end
   end
 
@@ -560,11 +595,10 @@ class View < ActiveRecord::Base
     # Initialize the objects we need
     init()
   end
-
 end
 
 if(ARGV[0] == "testview")
-  m = View.new()
+  m = NuView.new()
 
   r = m.revision()
 
@@ -647,7 +681,7 @@ if(ARGV[0] == "testview")
   puts("id = #{id}")
   puts()
 
-  other_m = View.find(id)
+  other_m = NuView.find(id)
 
   puts("Loaded from DB:")
   puts(other_m.to_s)
@@ -663,7 +697,7 @@ if(ARGV[0] == "testview")
   end
 
   # This will break the REDO chain
-  #puts other_m.do_delta(View.create_segment_delta({ :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "\x5b\x5c\xca\xb9\x21\xa1\x65\x71\x53\x9a\x63\xd2\xd4\x5e\x7c\x55"}))
+  #puts other_m.do_delta(NuView.create_segment_delta({ :name => "s1", :address => 0x1000, :file_address => 0x0000, :data => "\x5b\x5c\xca\xb9\x21\xa1\x65\x71\x53\x9a\x63\xd2\xd4\x5e\x7c\x55"}))
 
   loop do
     puts other_m.redo()
