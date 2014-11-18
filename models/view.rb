@@ -64,7 +64,9 @@ module Undoable
       self.undo_buffer << { :type => :method, :forward => forward, :backward => backward }
 
       # When a real action is taken, kill the 'redo' buffer
-      self.redo_buffer = []
+      if(!@redoing)
+        self.redo_buffer = []
+      end
     else
       # If we're redo-ing, add to the redo buffer
       self.redo_buffer << { :type => :method, :forward => forward, :backward => backward }
@@ -100,6 +102,7 @@ module Undoable
 
   def redo()
     puts("Entering redo()!")
+    @redoing = true
 
     loop do
       action = self.redo_buffer.pop()
@@ -120,6 +123,8 @@ module Undoable
 
       break # TODO: Figure out how to add checkpoints to redo properly
     end
+
+    @redoing = false
   end
 end
 
