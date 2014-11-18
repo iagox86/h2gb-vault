@@ -13,7 +13,7 @@ module Model
   end
 
   def to_json(params = {})
-    raise(NotImplementedException, "dump() needs to be overridden!")
+    raise(NotImplementedError, "to_json() needs to be overridden!")
   end
 
   def as_json(p = {})

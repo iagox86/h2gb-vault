@@ -301,19 +301,8 @@ class Vault < Sinatra::Application
 
     segments = JSON.parse(request.body.read, :symbolize_names => true)
 
-    # Make sure it's an array
-    if(segments.is_a?(Hash))
-      segments = [segments]
-    end
-
     # Loop through the one or more segments we need to create and do them
-    segments.each do |segment|
-      if(!segment[:data].is_a?(String))
-        raise(VaultException, "Segments require a base64-encoded 'data' field")
-      end
-      segment[:data] = Base64.decode64(segment[:data])
-      view.do_delta(view.create_segment_delta(segment))
-    end
+    view.create_segments(segments)
     view.save()
 
     return view.to_json(params)
@@ -324,20 +313,8 @@ class Vault < Sinatra::Application
     params = JSON.parse(request.body.read, :symbolize_names => true)
     segments = params[:segments]
 
-    # If it's just a string, make it into an array
-    if(segments.is_a?(String))
-      segments = [segments]
-    end
-
-    # If it isn't an array, we have problems
-    if(!segments.is_a?(Array))
-      raise(VaultException, "delete_segment requires one or more names as the body")
-    end
-
-    # Loop through the one or more segments we need to create and do them
-    segments.each do |segment|
-      view.do_delta(view.delete_segment_delta(segment))
-    end
+    # Delete the segments
+    view.delete_segments(segments)
     view.save()
 
     return view.to_json(params)
@@ -350,17 +327,14 @@ class Vault < Sinatra::Application
     if(body[:node].nil?)
       raise(VaultException, "Required field: 'node'.")
     end
-
-    # Make sure it's an array
-    nodes = body[:node]
-    if(nodes.is_a?(Hash))
-      nodes = [nodes]
+    if(body[:segment].nil?)
+      raise(VaultException, "Required field: 'segment'.")
     end
 
-    # Loop through the one or more nodes we need to create and do them
-    nodes.each do |node|
-      view.do_delta(view.create_node_delta(node))
-    end
+    view.create_nodes(
+      :segment_name => body[:segment],
+      :nodes        => body[:node]
+    ) # TODO: Deal with pluralizations
     view.save()
 
     return view.to_json(params.merge({:with_nodes => 'true'}))
@@ -369,24 +343,7 @@ class Vault < Sinatra::Application
   post('/views/:view_id/delete_node') do |view_id|
     view = View.find(view_id)
     nodes = JSON.parse(params['node'], :symbolize_names => true)
-
-    # If it's just a string, make it into an array
-    if(nodes.is_a?(Fixnum))
-      nodes = [nodes]
-    end
-
-    # If it isn't an array, we have problems
-    if(!nodes.is_a?(Array))
-      raise(VaultException, "delete_node requires one or more names as the body")
-    end
-
-    # Loop through the one or more nodes we need to create and do them
-    nodes.each do |node|
-      if(!node.is_a?(Fixnum))
-        raise(VaultException, "delete_node requires a single or an array of addresses as integers")
-      end
-      view.do_delta(view.delete_node_delta(node))
-    end
+    view.delete_nodes(nodes)
     view.save()
 
     return view.to_json(params)
@@ -401,11 +358,8 @@ class Vault < Sinatra::Application
   end
 
   post('/views/:view_id/redo') do |view_id|
-    puts("\nA\n")
     view = View.find(view_id)
-    puts("\nB\n")
     view.redo()
-    puts("\nC\n")
     view.save()
 
     return view.to_json(params)

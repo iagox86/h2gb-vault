@@ -23,10 +23,10 @@ class CreateTables < ActiveRecord::Migration
       t.belongs_to(:workspace)
 
       t.string(:name)
-      t.text(:deltas)
+
       t.text(:undo_buffer)
       t.text(:redo_buffer)
-      t.text(:snapshot)
+      t.text(:segments)
 
       t.timestamps()
     end

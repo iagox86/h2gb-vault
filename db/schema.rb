@@ -24,10 +24,9 @@ ActiveRecord::Schema.define(version: 20140920215248) do
   create_table "views", force: true do |t|
     t.integer  "workspace_id"
     t.string   "name"
-    t.text     "deltas"
     t.text     "undo_buffer"
     t.text     "redo_buffer"
-    t.text     "snapshot"
+    t.text     "segments"
     t.datetime "created_at"
     t.datetime "updated_at"
   end
