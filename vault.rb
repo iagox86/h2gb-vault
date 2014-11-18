@@ -258,7 +258,6 @@ class Vault < Sinatra::Application
 
     view = w.views.new(:name => body[:name])
     view.save()
-
     return view.to_json()
   end
 

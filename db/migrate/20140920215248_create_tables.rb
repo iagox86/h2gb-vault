@@ -28,6 +28,8 @@ class CreateTables < ActiveRecord::Migration
       t.text(:redo_buffer)
       t.text(:segments)
 
+      t.integer(:revision)
+
       t.timestamps()
     end
   end

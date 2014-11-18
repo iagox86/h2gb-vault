@@ -145,15 +145,14 @@ class View < ActiveRecord::Base
       :undo_buffer => [],
       :redo_buffer => [],
       :segments    => {},
+      :revision    => 0,
     }))
 
     @starting_revision = 0
   end
 
-  def revision()
-#    self.rev += 1
-#
-#    return self.rev
+  def next_revision()
+    return (self.revision += 1)
   end
 
   def create_segments(segments)
@@ -181,10 +180,13 @@ class View < ActiveRecord::Base
         # Decode the base64
         segment[:data] = Base64.decode64(segment[:data])
 
+        # Save the revision
+        segment[:revision] = next_revision()
+
         # Create the 'special' fields
-#        segment[:revision] = revision()
-        segment[:nodes]    = {}
-        segment[:xrefs]    = []
+        segment[:nodes]      = {}
+        segment[:nodes_meta] = []
+        segment[:xrefs]      = []
 
         # Store the new segment
         self.segments[segment[:name]] = segment
@@ -289,6 +291,17 @@ class View < ActiveRecord::Base
         if(node[:value].nil?)
           raise(ViewException, "The 'value' field is required!")
         end
+        if(!node[:refs].nil? && !node[:refs].is_a?(Array))
+          raise(ViewException, "The 'refs' field, if specified, must be an array (not a #{node[:refs].class})!")
+        end
+        if(node[:address] < segment[:address] || (node[:address] + node[:length]) > (segment[:address] + segment[:data].length()))
+          raise(ViewException, "The node goes outside the segment's memory space (node goes from 0x%x to 0x%x, segment goes from 0x%x to 0x%x)!" % [
+            node[:address],
+            node[:address] + node[:length],
+            segment[:address],
+            segment[:address] + segment[:data].length(),
+          ])
+        end
 
         # Loop through all the addresses in the node
         ((node[:address])..(node[:address]+node[:length]-1)).each do |address|
@@ -300,11 +313,27 @@ class View < ActiveRecord::Base
 
           # Create the node
           segment[:nodes][address] = node
+
+          # Make sure the metadata table exists without destroying it
+          segment[:nodes_meta][address] ||= {}
+
+          # Create some metadata
+          segment[:nodes_meta][address][:revision] = next_revision()
         end
 
-        # TODO: Record Xrefs
+        # TODO: This will fail for refs that go outside the segment
+        if(node[:refs] && node[:refs].length() > 0)
+          node[:refs].each do |ref|
+            # Make sure the node has some metadata
+            segment[:nodes_meta][ref] ||= {}
 
-        # TODO: Sanity check the address
+            # Make sure the node has an xrefs array
+            segment[:nodes_meta][ref][:xrefs] ||= []
+
+            # Save the refs there
+            segment[:nodes_meta][ref][:xrefs] << node[:address]
+          end
+        end
 
         # Record the action (note: this needs to go after delete_nodes(), otherwise things will
         # undo in the wrong order...
@@ -355,6 +384,9 @@ class View < ActiveRecord::Base
         addresses = [addresses]
       end
 
+      # Since we're updating the segment, bump up the segment's revision
+      segment[:revision] = next_revision()
+
       # Loop through the addresses we need to delete
       addresses.each do |address|
         # Get the node at that address
@@ -366,8 +398,37 @@ class View < ActiveRecord::Base
           next
         end
 
+        # Delete the appropriate node(s)
         node[:address].upto(node[:address] + node[:length]) do |a|
           segment[:nodes].delete(a)
+        end
+
+        # Delete xrefs
+        if(node[:refs] && node[:refs].length() > 0)
+          node[:refs].each do |ref|
+            # Make sure the node has some metadata
+            if(segment[:nodes_meta][ref].nil?)
+              puts("Warning: missing Xref entry! [1]")
+              next
+            end
+
+            # Make sure the node has an xrefs array
+            if(segment[:nodes_meta][ref][:xrefs].nil?)
+              puts("Warning: missing Xref entry! [2]")
+              next
+            end
+
+            # Delete the xref
+            if(segment[:nodes_meta][ref][:xrefs].delete(node[:address]).nil?)
+              puts("Warning: missing Xref entry! [3]")
+              next
+            end
+
+            # Get rid of the xrefs altogether if there aren't any
+            if(segment[:nodes_meta][ref][:xrefs].length() == 0)
+              segment[:nodes_meta][ref][:xrefs] = nil
+            end
+          end
         end
 
         # Record the action
@@ -393,11 +454,55 @@ class View < ActiveRecord::Base
     end
   end
 
-  def get_nodes_in_segment(params = {})
+  def create_undefined_node(segment, address, revision = 0)
+    # Make fake node
+    value = segment[:data][address].ord()
+    if(value >= 0x20 && value < 0x7F)
+      value = "<undefined> 0x%02x ; '%c'" % [value, value]
+    else
+      value = "<undefined> 0x%02x" % value
+    end
+
+    return {
+      :type    => "undefined",
+      :address => address,
+      :length  => 1,
+      :value   => value,
+      :details => { },
+    }
+  end
+
+  # Returns either the real or a fake node (should not be used externally)
+  def node_at(segment, address)
+    if(segment.nil?)
+      raise(ViewException, "segment can't be nil")
+    end
+    if(!segment.is_a?(Hash))
+      raise(ViewException, "segment was the wrong type!")
+    end
+
+    if(address.nil?)
+      raise(ViewException, "address can't be nil")
+    end
+    if(!address.is_a?(Fixnum))
+      raise(ViewException, "address was the wrong type!")
+    end
+
+    # Create either a real node or an undefined one
+    if(segment[:nodes][address].nil?)
+      node = create_undefined_node(segment, address)
+    else
+      node = segment[:nodes][address]
+    end
+
+    # Merge in the metadata
+    return node.merge(segment[:nodes_meta][address] || {:revision => 0})
+  end
+
+  def get_nodes(params = {})
     # Possible params (to be done later):
     # start
     # length
-    # revision
     # hide_undefined
 
     # Make sure a segment name was passed in
@@ -415,41 +520,30 @@ class View < ActiveRecord::Base
     results = []
     address = segment[:address]
     while(address < segment[:address] + segment[:data].length) do
-      node = segment[:nodes][address]
+      node = node_at(segment, address)
 
-      if(!node.nil?)
-        results << node.merge({
-          :raw => Base64.encode64(segment[:data][address, node[:length]]),
-        })
-
-        address += node[:length]
-        # TODO: Include the 'raw' data
-      else
-        # Make fake node
-        value = segment[:data][address].ord()
-        if(value >= 0x20 && value < 0x7F)
-          value = "<undefined> 0x%02x ; '%c'" % [value, value]
-        else
-          value = "<undefined> 0x%02x" % value
-        end
-
-        results << {
-          :type    => "undefined",
-          :address => address,
-          :length  => 1,
-          :value   => value,
-          :details => { },
-          :raw     => Base64.encode64(segment[:data][address, 1]),
-        }
-        address += 1
+      # Sanity checking myself, I can probably remove this later once I trust node_at()
+      if(node.nil?)
+        raise(ViewException, "Somehow we ended up with node_at() returning nil! Oops!")
       end
+
+      # Exclude old nodes if the user doesn't want 'em
+      if(params[:since] && node[:revision] <= node[:since])
+        next
+      end
+
+      # Add the raw data
+      results << node.merge({
+        :raw => Base64.encode64(segment[:data][address, node[:length]]),
+      })
+
+      address += node[:length]
     end
 
     return results
   end
 
   def to_json(params = {})
-#    starting = (params[:starting] || 0).to_i()
     with_nodes = (params[:with_nodes] == "true")
     with_data  = (params[:with_data]  == "true")
 
@@ -475,10 +569,15 @@ class View < ActiveRecord::Base
         next
       end
 
+      # If we're looking for anything updated since a certain point, skip older stuff
+      if(params[:since] && segment[:revision] <= params[:since])
+        next
+      end
+
       # The entry for this segment
       s = {
-        :name => segment[:name],
-#        :revision => segment[:revision]
+        :name     => segment[:name],
+        :revision => segment[:revision],
       }
 
       # Don't include the data if the requester doesn't want it
@@ -488,7 +587,7 @@ class View < ActiveRecord::Base
 
       # Let the user skip including nodes
       if(with_nodes == true)
-        s[:nodes] = get_nodes_in_segment(:segment_name => segment[:name])
+        s[:nodes] = get_nodes(params.merge({:segment_name => segment[:name]}))
       end
 
       # Check if this segment should be included
@@ -501,15 +600,11 @@ class View < ActiveRecord::Base
   end
 
   after_find do |c|
-    # Initialize the objects we need
-#    init()
-
     # Set up the starting revision
-#    @starting_revision = revision()
+    @starting_revision = self.revision
   end
 
   after_create do |c|
-    # Initialize the objects we need
-#    init()
+    @starting_revision = self.revision # Should be 0
   end
 end
