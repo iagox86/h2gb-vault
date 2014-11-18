@@ -387,16 +387,4 @@ class Vault < Sinatra::Application
 
     return add_status(0, {:result => "Done!"})
   end
-
-  get(/\/static\/([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/) do |file|
-    if(file =~ /\.html$/)
-      content_type "text/html"
-    elsif(file =~ /\.js$/)
-      content_type "text/javascript"
-    else
-      raise(Exception, "Unknown filetype")
-    end
-
-    return IO.read(File.dirname(__FILE__) + "/static/#{file}")
-  end
 end
