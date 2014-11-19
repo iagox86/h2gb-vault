@@ -553,7 +553,6 @@ class View < ActiveRecord::Base
       :name     => self.name,
       :view_id  => self.id,
       :revision => self.revision,
-      :segments => [],
     }
 
     # Ensure the names argument is always an array
@@ -563,39 +562,38 @@ class View < ActiveRecord::Base
       params[:names] = [params[:names]]
     end
 
-    # I want all segments, because it's possible that a node inside a segment matters
-    # TODO: When I update a node, also update the segment's revision
-    self.segments.each_value do |segment|
-      # If the user wanted a specific segment name
-      if(!params[:names].nil? && !params[:names].include?(segment[:name]))
-        next
-      end
+    if(with_segments)
+      result[:segments] = []
 
-      # If we're looking for anything updated since a certain point, skip older stuff
-      if(segment[:revision] <= since)
-        next
-      end
+      self.segments.each_value do |segment|
+        # If the user wanted a specific segment name
+        if(!params[:names].nil? && !params[:names].include?(segment[:name]))
+          next
+        end
 
-      # The entry for this segment
-      s = {
-        :name     => segment[:name],
-        :revision => segment[:revision],
-      }
+        # If we're looking for anything updated since a certain point, skip older stuff
+        if(segment[:revision] <= since)
+          next
+        end
 
-      # Don't include the data if the requester doesn't want it
-      if(with_data == true)
-        s[:data] = Base64.encode64(segment[:data])
-      end
+        # The entry for this segment
+        s = {
+          :name     => segment[:name],
+          :revision => segment[:revision],
+        }
 
-      # Let the user skip including nodes
-      if(with_nodes)
-        s[:nodes] = get_nodes(params.merge({:segment_name => segment[:name]}))
-      end
+        # Don't include the data if the requester doesn't want it
+        if(with_data == true)
+          s[:data] = Base64.encode64(segment[:data])
+        end
 
-      # Check if this segment should be included
-#      if((!s[:nodes].nil? && s[:nodes].length > 0) || s[:revision] >= starting)
+        # Let the user skip including nodes
+        if(with_nodes)
+          s[:nodes] = get_nodes(params.merge({:segment_name => segment[:name]}))
+        end
+
         result[:segments] << s
-#      end
+      end
     end
 
     return result
