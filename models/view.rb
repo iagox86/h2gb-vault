@@ -149,6 +149,7 @@ class View < ActiveRecord::Base
   end
 
   def next_revision()
+    # TODO: Technically, we only have to change this once
     return (self.revision += 1)
   end
 
@@ -390,9 +391,16 @@ class View < ActiveRecord::Base
           next
         end
 
-        # Delete the appropriate node(s)
+        # Loop through the actual addresses
         node[:address].upto(node[:address] + node[:length]) do |a|
+          # Delete the entry at that address
           segment[:nodes].delete(a)
+
+          # Make sure the metadata exists
+          segment[:nodes_meta][a] ||= {}
+
+          # Update the revision
+          segment[:nodes_meta][a][:revision] = next_revision()
         end
 
         # Delete xrefs
