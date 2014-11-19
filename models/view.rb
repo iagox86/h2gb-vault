@@ -76,8 +76,6 @@ module Undoable
   def undo()
     @undoing = true
 
-    puts("Entering undo()!")
-
     loop do
       action = self.undo_buffer.pop()
       if(action.nil?)
@@ -101,7 +99,6 @@ module Undoable
   end
 
   def redo()
-    puts("Entering redo()!")
     @redoing = true
 
     loop do
@@ -209,8 +206,6 @@ class View < ActiveRecord::Base
   end
 
   def delete_segments(names)
-    puts(self.segments.inspect)
-
     undoable() do |undo|
       # Force names into being an array
       if(!names.is_a?(Array))
@@ -360,11 +355,8 @@ class View < ActiveRecord::Base
   end
 
   def delete_nodes(params)
-    puts("in delete_nodes(#{params.inspect})")
-
     undoable() do |undo|
       # Make sure a segment name was passed in
-      puts(params.inspect)
       segment_name = params[:segment_name]
       if(segment_name.nil?)
         raise(ViewException, ":segment_name is required")
@@ -454,24 +446,6 @@ class View < ActiveRecord::Base
     end
   end
 
-  def create_undefined_node(segment, address, revision = 0)
-    # Make fake node
-    value = segment[:data][address].ord()
-    if(value >= 0x20 && value < 0x7F)
-      value = "<undefined> 0x%02x ; '%c'" % [value, value]
-    else
-      value = "<undefined> 0x%02x" % value
-    end
-
-    return {
-      :type    => "undefined",
-      :address => address,
-      :length  => 1,
-      :value   => value,
-      :details => { },
-    }
-  end
-
   # Returns either the real or a fake node (should not be used externally)
   def node_at(segment, address)
     if(segment.nil?)
@@ -490,13 +464,39 @@ class View < ActiveRecord::Base
 
     # Create either a real node or an undefined one
     if(segment[:nodes][address].nil?)
-      node = create_undefined_node(segment, address)
+      value = segment[:data][address].ord()
+      if(value >= 0x20 && value < 0x7F)
+        value = "<undefined> 0x%02x ; '%c'" % [value, value]
+      else
+        value = "<undefined> 0x%02x" % value
+      end
+
+      node = {
+        :type    => "undefined",
+        :address => address,
+        :length  => 1,
+        :value   => value,
+        :details => { },
+      }
     else
       node = segment[:nodes][address]
     end
 
-    # Merge in the metadata
-    return node.merge(segment[:nodes_meta][address] || {:revision => 0})
+    # Add the 'raw' bytes
+    node[:raw] = Base64.encode64(segment[:data][address, node[:length]])
+
+    # Get the metadata and add it to the node
+    meta = segment[:nodes_meta][address]
+    if(!meta.nil?)
+      node = node.merge(meta)
+    end
+
+    # Ensure we have a revision number (this happens if there is metadata on an undefined node)
+    if(node[:revision].nil?)
+      node[:revision] = 0
+    end
+
+    return node
   end
 
   def get_nodes(params = {})
@@ -526,16 +526,15 @@ class View < ActiveRecord::Base
       if(node.nil?)
         raise(ViewException, "Somehow we ended up with node_at() returning nil! Oops!")
       end
-
-      # Exclude old nodes if the user doesn't want 'em
-      if(params[:since] && node[:revision] <= node[:since])
-        next
+      if(node[:revision].nil?)
+        raise(ViewException, "Somehow we ended up with node_at() not returning a revision! Oops!")
       end
 
-      # Add the raw data
-      results << node.merge({
-        :raw => Base64.encode64(segment[:data][address, node[:length]]),
-      })
+      # Only add it if it meets the user's requirements
+      if(params[:since].nil? || (node[:revision] > params[:since]))
+        results << node.merge({
+        })
+      end
 
       address += node[:length]
     end
@@ -544,13 +543,16 @@ class View < ActiveRecord::Base
   end
 
   def to_json(params = {})
-    with_nodes = (params[:with_nodes] == "true")
-    with_data  = (params[:with_data]  == "true")
+    # Make sure these are true-ish
+    with_segments = params[:with_segments]
+    with_nodes    = params[:with_nodes]
+    with_data     = params[:with_data]
+    since         = params[:since] || 0
 
     result = {
       :name     => self.name,
       :view_id  => self.id,
-      :revision => self.revision(),
+      :revision => self.revision,
       :segments => [],
     }
 
@@ -570,7 +572,7 @@ class View < ActiveRecord::Base
       end
 
       # If we're looking for anything updated since a certain point, skip older stuff
-      if(params[:since] && segment[:revision] <= params[:since])
+      if(segment[:revision] <= since)
         next
       end
 
@@ -586,7 +588,7 @@ class View < ActiveRecord::Base
       end
 
       # Let the user skip including nodes
-      if(with_nodes == true)
+      if(with_nodes)
         s[:nodes] = get_nodes(params.merge({:segment_name => segment[:name]}))
       end
 

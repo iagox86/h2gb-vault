@@ -69,6 +69,26 @@ class Vault < Sinatra::Application
     end
   end
 
+  def make_truthy(h)
+    result = {}
+
+    h.each_pair do |k, v|
+      if(v == '')
+        v = nil
+      elsif(v == 'true')
+        v = true
+      elsif(v == 'false')
+        v = false
+      elsif(v =~ /^[0-9]+$/)
+        v = v.to_i()
+      end
+
+      result[k.to_sym] = v
+    end
+
+    return result
+  end
+
   # Add important headers and encode everything as JSON
   after do
     if(response.content_type.nil?)
@@ -270,9 +290,14 @@ class Vault < Sinatra::Application
 
   # Find view
   get('/views/:view_id') do |view_id|
-    view = View.find(view_id)
+    v = View.find(view_id)
 
-    return view.to_json()
+    return v.to_json({
+      :with_segments => false, # These defaults will be overridden by the user's request
+      :with_data     => false,
+      :with_nodes    => false,
+      :since         => 0,
+    }.merge(make_truthy(params)))
   end
 
   # Update view
@@ -284,7 +309,12 @@ class Vault < Sinatra::Application
     v.name = body[:name]
     v.save()
 
-    return v.to_json()
+    return v.to_json({
+      :with_segments => false, # These defaults will be overridden by the user's request
+      :with_data     => false,
+      :with_nodes    => false,
+      :since         => 0,
+    }.merge(body))
   end
 
   # Delete view
@@ -296,27 +326,36 @@ class Vault < Sinatra::Application
   end
 
   post('/views/:view_id/new_segment') do |view_id|
+    body = JSON.parse(request.body.read, :symbolize_names => true)
     view = View.find(view_id)
 
-    segments = JSON.parse(request.body.read, :symbolize_names => true)
-
     # Loop through the one or more segments we need to create and do them
-    view.create_segments(segments)
+    view.create_segments(body)
     view.save()
 
-    return view.to_json(params)
+    return view.to_json({
+      :with_segments => true, # These defaults will be overridden by the user's request
+      :with_data     => false,
+      :with_nodes    => false,
+      :since         => view.starting_revision,
+    }.merge(body))
   end
 
   post('/views/:view_id/delete_segment') do |view_id|
     view = View.find(view_id)
-    params = JSON.parse(request.body.read, :symbolize_names => true)
-    segments = params[:segments]
+    body = JSON.parse(request.body.read, :symbolize_names => true)
+    segments = body[:segments]
 
     # Delete the segments
     view.delete_segments(segments)
     view.save()
 
-    return view.to_json(params)
+    return view.to_json({
+      :with_segments => true, # These defaults will be overridden by the user's request
+      :with_data     => false,
+      :with_nodes    => false,
+      :since         => view.starting_revision,
+    }.merge(body))
   end
 
   post('/views/:view_id/new_node') do |view_id|
@@ -336,54 +375,87 @@ class Vault < Sinatra::Application
     ) # TODO: Deal with pluralizations
     view.save()
 
-    return view.to_json(params.merge({:with_nodes => 'true'}))
+    return view.to_json({
+      :with_segments => true, # These defaults will be overridden by the user's request
+      :with_data     => false,
+      :with_nodes    => true,
+      :since         => view.starting_revision,
+    }.merge(body))
   end
 
+  # TODO: How can this possibly work?
   post('/views/:view_id/delete_node') do |view_id|
+    #body = JSON.parse(request.body.read, :symbolize_names => true)
+
     view = View.find(view_id)
     nodes = JSON.parse(params['node'], :symbolize_names => true)
     view.delete_nodes(nodes)
     view.save()
 
-    return view.to_json(params)
+    return view.to_json({
+      :with_segments => true, # These defaults will be overridden by the user's request
+      :with_data     => false,
+      :with_nodes    => true,
+      :since         => view.starting_revision,
+    }.merge(body))
   end
 
   post('/views/:view_id/undo') do |view_id|
+    body = JSON.parse(request.body.read, :symbolize_names => true)
+
     view = View.find(view_id)
     view.undo()
     view.save()
 
-    return view.to_json(params)
+    return view.to_json({
+      :with_segments => true, # These defaults will be overridden by the user's request
+      :with_data     => false,
+      :with_nodes    => true,
+      :since         => view.starting_revision,
+    }.merge(body))
   end
 
   post('/views/:view_id/redo') do |view_id|
+    body = JSON.parse(request.body.read, :symbolize_names => true)
+
     view = View.find(view_id)
     view.redo()
     view.save()
 
-    return view.to_json(params)
+    return view.to_json({
+      :with_segments => true, # These defaults will be overridden by the user's request
+      :with_data     => false,
+      :with_nodes    => true,
+      :since         => view.starting_revision,
+    }.merge(body))
   end
 
   get('/views/:view_id/segments') do |view_id|
     view = View.find(view_id)
 
-    return view.to_json(params.merge(:only_segments => true))
+    if(params[:with_data].nil?)
+      params
+    end
+    if(params[:with_nodes].nil?)
+      params[:with_nodes] = false
+    end
+
+    return view.to_json({
+      :with_segments => true, # These defaults will be overridden by the user's request
+      :with_data     => false,
+      :with_nodes    => false,
+      :since         => 0,
+    }.merge(make_truthy(params)))
   end
 
   get('/views/:view_id/nodes') do |view_id|
     view = View.find(view_id)
 
-    return view.to_json(params.merge(:only_nodes => true))
-  end
-
-  # TODO: This is testing only
-  get('/views/:view_id/clear') do |view_id|
-    view = View.find(view_id)
-    view.deltas = []
-    view.undo_buffer = []
-    view.redo_buffer = []
-    view.save()
-
-    return add_status(0, {:result => "Done!"})
+    return view.to_json({
+      :with_segments => true, # These defaults will be overridden by the user's request
+      :with_data     => false,
+      :with_nodes    => true,
+      :since         => 0,
+    }.merge(make_truthy(params)))
   end
 end
