@@ -149,8 +149,7 @@ class View < ActiveRecord::Base
   end
 
   def next_revision()
-    # TODO: Technically, we only have to change this once
-    return (self.revision += 1)
+    return self.revision + 1
   end
 
   def create_segments(segments)
@@ -615,5 +614,9 @@ class View < ActiveRecord::Base
 
   after_create do |c|
     @starting_revision = self.revision # Should be 0
+  end
+
+  before_save do
+    self.revision += 1
   end
 end
