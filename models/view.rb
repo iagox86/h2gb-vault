@@ -145,7 +145,7 @@ class View < ActiveRecord::Base
       :revision    => 0,
     }))
 
-    @starting_revision = 0
+    @starting_revision = -1
   end
 
   def next_revision()
@@ -532,8 +532,9 @@ class View < ActiveRecord::Base
 
       # Only add it if it meets the user's requirements
       if(params[:since].nil? || (node[:revision] > params[:since]))
-        results << node.merge({
-        })
+        results << node
+      else
+        puts("Not including node with revision %d (showing nodes since %d)" % [node[:revision], params[:since]])
       end
 
       address += node[:length]
@@ -547,7 +548,7 @@ class View < ActiveRecord::Base
     with_segments = params[:with_segments]
     with_nodes    = params[:with_nodes]
     with_data     = params[:with_data]
-    since         = params[:since] || 0
+    since         = params[:since] || -1
 
     result = {
       :name     => self.name,

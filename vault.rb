@@ -296,7 +296,6 @@ class Vault < Sinatra::Application
       :with_segments => false, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => false,
-      :since         => 0,
     }.merge(make_truthy(params)))
   end
 
@@ -313,7 +312,6 @@ class Vault < Sinatra::Application
       :with_segments => false, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => false,
-      :since         => 0,
     }.merge(body))
   end
 
@@ -444,7 +442,6 @@ class Vault < Sinatra::Application
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => false,
-      :since         => 0,
     }.merge(make_truthy(params)))
   end
 
@@ -455,7 +452,6 @@ class Vault < Sinatra::Application
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => true,
-      :since         => 0,
     }.merge(make_truthy(params)))
   end
 end
