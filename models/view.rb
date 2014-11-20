@@ -571,7 +571,7 @@ class View < ActiveRecord::Base
     end
 
     if(with_segments)
-      result[:segments] = []
+      result[:segments] = {}
 
       self.segments.each_value do |segment|
         # If the user wanted a specific segment name
@@ -600,7 +600,7 @@ class View < ActiveRecord::Base
           s[:nodes] = get_nodes(params.merge({:segment_name => segment[:name]}))
         end
 
-        result[:segments] << s
+        result[:segments][s[:name]] = s
       end
     end
 
