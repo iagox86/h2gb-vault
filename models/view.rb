@@ -327,6 +327,9 @@ class View < ActiveRecord::Base
 
             # Save the refs there
             segment[:nodes_meta][ref][:xrefs] << node[:address]
+
+            # Note that the xref'd node has also been updated
+            segment[:nodes_meta][ref][:revision] = next_revision()
           end
         end
 
