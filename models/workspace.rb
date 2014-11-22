@@ -30,6 +30,7 @@ class Workspace < ActiveRecord::Base
   def to_json(params = {})
     return {
       :workspace_id => self.id,
+      :binary_id    => self.binary_id,
       :name         => self.name,
       :settings     => self.settings
     }

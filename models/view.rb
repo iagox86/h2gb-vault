@@ -561,9 +561,10 @@ class View < ActiveRecord::Base
     since         = params[:since] || -1
 
     result = {
-      :name     => self.name,
-      :view_id  => self.id,
-      :revision => self.revision,
+      :view_id      => self.id,
+      :workspace_id => workspace.id,
+      :name         => self.name,
+      :revision     => self.revision,
     }
 
     # Ensure the names argument is always an array
