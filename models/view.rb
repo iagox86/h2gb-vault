@@ -88,7 +88,6 @@ module Undoable
         break
       elsif(action[:type] == :method)
         puts("UNDOING:")
-        pp(action)
         self.send(action[:backward][:method], action[:backward][:params])
       else
         raise(ViewException, "Unknown action type: #{action[:type]}")
@@ -173,9 +172,6 @@ class View < ActiveRecord::Base
         if(segment[:data].nil?)
           raise(ViewException, "The 'data' field is required when creating a segment")
         end
-
-        # Decode the base64
-        segment[:data] = Base64.decode64(segment[:data])
 
         # Save the revision
         segment[:revision] = next_revision()

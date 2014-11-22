@@ -30,6 +30,13 @@ class Vault < Sinatra::Application
     return table
   end
 
+  def to_a(d)
+    if(d.is_a?(Array))
+      return d
+    end
+    return [d]
+  end
+
   def convert_num(n)
     if(n > 0xFFFF)
       return '0x%08x' % n
@@ -181,7 +188,7 @@ class Vault < Sinatra::Application
     end
 
     if(!body[:data].nil?)
-      b.data = Base64.decode64(body[:data])
+      b.data = Base64.decode64(body[:data]) # TODO: Make this encode/decode magic
     end
     b.save()
 
@@ -335,6 +342,14 @@ class Vault < Sinatra::Application
     body = JSON.parse(request.body.read, :symbolize_names => true)
     view = View.find(view_id)
 
+    # Fix the base64
+    body = to_a(body)
+    body.map do |segment|
+      segment[:data] = Base64.decode64(segment[:data])
+
+      segment # return
+    end
+
     # Loop through the one or more segments we need to create and do them
     view.create_segments(body)
     view.save()
@@ -344,7 +359,7 @@ class Vault < Sinatra::Application
       :with_data     => false,
       :with_nodes    => false,
       :since         => view.starting_revision,
-    }.merge(body))
+    })
   end
 
   post('/views/:view_id/delete_segment') do |view_id|
@@ -413,12 +428,14 @@ class Vault < Sinatra::Application
     view.undo()
     view.save()
 
-    return view.to_json({
+    result = view.to_json({
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => true,
       :since         => view.starting_revision,
     }.merge(body))
+
+    return result
   end
 
   post('/views/:view_id/redo') do |view_id|
