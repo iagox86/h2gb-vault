@@ -527,7 +527,7 @@ class View < ActiveRecord::Base
       raise(ViewException, "A segment with that name could not be found!")
     end
 
-    results = []
+    results = {}
     address = segment[:address]
     while(address < segment[:address] + segment[:data].length) do
       node = node_at(segment, address)
@@ -542,7 +542,7 @@ class View < ActiveRecord::Base
 
       # Only add it if it meets the user's requirements
       if(params[:since].nil? || (node[:revision] > params[:since]))
-        results << node
+        results[node[:address]] = node
       else
         puts("Not including node with revision %d (showing nodes since %d)" % [node[:revision], params[:since]])
       end
