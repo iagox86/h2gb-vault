@@ -24,7 +24,7 @@ module Model
   module ModelStatic
     def all_to_json(params = {})
       # Make an array of the json results
-      return (params[:all] || all()).map() { |entry| entry.to_json() }
+      return (params[:all] || all()).map() { |entry| entry.to_json(params) }
     end
   end
 end

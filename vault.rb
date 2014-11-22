@@ -158,12 +158,12 @@ class Vault < Sinatra::Application
 
   # List binaries (note: doesn't return file contents)
   get('/binaries') do
-    return {:binaries => Binary.all_to_json(:skip_data => true) }
+    return {:binaries => Binary.all_to_json(make_truthy(params)) }
   end
 
   # Download a binary
   get('/binaries/:binary_id') do |binary_id|
-    b = Binary.find(binary_id)
+    b = Binary.find(binary_id, make_truthy(params))
     return b.to_json()
   end
 
