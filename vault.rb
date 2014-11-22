@@ -163,8 +163,8 @@ class Vault < Sinatra::Application
 
   # Download a binary
   get('/binaries/:binary_id') do |binary_id|
-    b = Binary.find(binary_id, make_truthy(params))
-    return b.to_json()
+    b = Binary.find(binary_id)
+    return b.to_json(make_truthy(params))
   end
 
   # Update binary
@@ -172,9 +172,17 @@ class Vault < Sinatra::Application
     body = JSON.parse(request.body.read, :symbolize_names => true)
 
     b = Binary.find(binary_id)
-    b.name = body[:name]
-    b.comment = body[:comment]
-    b.data = Base64.decode64(body[:data])
+    if(!body[:name].nil?)
+      b.name = body[:name]
+    end
+
+    if(!body[:comment].nil?)
+      b.comment = body[:comment]
+    end
+
+    if(!body[:data].nil?)
+      b.data = Base64.decode64(body[:data])
+    end
     b.save()
 
     return b.to_json()
