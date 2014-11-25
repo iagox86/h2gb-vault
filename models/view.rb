@@ -8,6 +8,7 @@ require 'model.rb'
 
 require 'json'
 require 'sinatra/activerecord'
+require 'logger'
 
 require 'pp' # TODO: Debug
 
@@ -60,34 +61,36 @@ module Undoable
       raise(ViewException, "record_action requires a :backward parameter!")
     end
 
-    if(!@undoing)
+    if(@undoing)
+      # If we're redo-ing, add to the redo buffer backwards
+      self.redo_buffer << { :type => :method, :forward => backward, :backward => forward }
+    else
       self.undo_buffer << { :type => :method, :forward => forward, :backward => backward }
 
       # When a real action is taken, kill the 'redo' buffer
       if(!@redoing)
         self.redo_buffer = []
       end
-    else
-      # If we're redo-ing, add to the redo buffer
-      self.redo_buffer << { :type => :method, :forward => forward, :backward => backward }
     end
   end
 
   def undo()
     @undoing = true
 
+    # Create a checkpoint in the redo buffer
+    self.redo_buffer << { :type => :checkpoint }
+
     loop do
       action = self.undo_buffer.pop()
       if(action.nil?)
-        puts("DEBUG: No more actions left in the undo buffer")
+        logger.warn("undo(nil) # exiting redo")
         break
       end
+      logger.warn("undo(#{action[:backward].inspect})")
 
       if(action[:type] == :checkpoint)
-        puts("CHECKPOINT!")
         break
       elsif(action[:type] == :method)
-        puts("UNDOING:")
         self.send(action[:backward][:method], action[:backward][:params])
       else
         raise(ViewException, "Unknown action type: #{action[:type]}")
@@ -103,24 +106,29 @@ module Undoable
     loop do
       action = self.redo_buffer.pop()
       if(action.nil?)
-        puts("DEBUG: No more actions left in the redo buffer")
+        logger.warn("redo(nil) # exiting redo")
         break
       end
 
+      logger.warn("redo(#{action[:forward].inspect})")
+
       if(action[:type] == :checkpoint)
-        puts("CHECKPOINT!")
         break
       elsif(action[:type] == :method)
-        puts("REDOING:")
-        self.send(action[:backward][:method], action[:backward][:params])
+        self.send(action[:forward][:method], action[:forward][:params])
       else
         raise(ViewException, "Unknown action type: #{action[:type]}")
       end
-
-      break # TODO: Figure out how to add checkpoints to redo properly
     end
 
     @redoing = false
+  end
+
+  def undo_to_json(params = {})
+    return {
+      :undo => self.undo_buffer,
+      :redo => self.redo_buffer,
+    }
   end
 end
 
@@ -159,6 +167,7 @@ class View < ActiveRecord::Base
       end
 
       segments.each do |segment|
+        logger.warn("create_segment(#{segment.inspect})")
         # Do some sanity checks
         if(segment[:name].nil?)
           raise(ViewException, "The 'name' field is required when creating a segment")
@@ -209,6 +218,7 @@ class View < ActiveRecord::Base
       end
 
       names.each do |name|
+        logger.warn("delete_segment(#{name.inspect})")
         segment = self.segments[name]
         if(segment.nil?)
           raise(ViewException, "A segment with that name could not be found!")
@@ -269,6 +279,7 @@ class View < ActiveRecord::Base
 
       # Loop through the nodes
       nodes.each do |node|
+        logger.warn("create_node(#{segment_name}, #{node.inspect})")
         # Sanity checks
         if(node[:type].nil?)
           raise(ViewException, "The 'type' field is required!")
@@ -380,12 +391,13 @@ class View < ActiveRecord::Base
 
       # Loop through the addresses we need to delete
       addresses.each do |address|
+        logger.warn("create_node(#{segment_name}, #{address})")
+
         # Get the node at that address
         node = segment[:nodes][address]
 
         # If there wasn't a node there, carry on
         if(node.nil?)
-          puts("DEBUG: Tried to delete a nil node")
           next
         end
 

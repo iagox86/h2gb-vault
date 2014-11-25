@@ -9,6 +9,9 @@ require 'models/workspace'
 
 require 'json'
 
+# Disable verbose logging
+ActiveRecord::Base.logger.sev_threshold = Logger::WARN
+
 # Database stuff
 ActiveRecord::Base.establish_connection(
   :adapter => 'sqlite3',
@@ -23,7 +26,7 @@ class VaultException < StandardError
 end
 
 class Vault < Sinatra::Application
-#  set :environment, :production
+  set :environment, :production
 
   def add_status(status, table)
     table[:status] = status
@@ -478,5 +481,11 @@ class Vault < Sinatra::Application
       :with_data     => false,
       :with_nodes    => true,
     }.merge(make_truthy(params)))
+  end
+
+  get('/views/:view_id/debug/undo_log') do |view_id|
+    view = View.find(view_id)
+
+    return view.undo_to_json()
   end
 end
