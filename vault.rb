@@ -294,16 +294,20 @@ class Vault < Sinatra::Application
     body = JSON.parse(request.body.read, :symbolize_names => true)
     w = Workspace.find(workspace_id)
 
-    view = w.views.new(:name => body[:name])
+    view = w.views.new(:name => body.delete(:name))
     view.save()
-    return view.to_json()
+    return view.to_json(body)
   end
 
   # Get views for a workspace
   get('/workspaces/:workspace_id/views') do |workspace_id|
     w = Workspace.find(workspace_id)
 
-    return {:views => View.all_to_json(:all => w.views.all()) }
+    return {
+      :views => View.all_to_json({
+        :all => w.views.all()
+      }.merge(make_truthy(params))
+    )}
   end
 
   # Find view
@@ -341,20 +345,20 @@ class Vault < Sinatra::Application
     return {:deleted => true}
   end
 
-  post('/views/:view_id/new_segment') do |view_id|
+  post('/views/:view_id/new_segments') do |view_id|
     body = JSON.parse(request.body.read, :symbolize_names => true)
     view = View.find(view_id)
 
     # Fix the base64
-    body = to_a(body)
-    body.map do |segment|
+    segments = to_a(body.delete(:segments))
+    segments.map do |segment|
       segment[:data] = Base64.decode64(segment[:data])
 
       segment # return
     end
 
     # Loop through the one or more segments we need to create and do them
-    view.create_segments(body)
+    view.create_segments(segments)
     view.save()
 
     return view.to_json({
@@ -362,10 +366,10 @@ class Vault < Sinatra::Application
       :with_data     => false,
       :with_nodes    => false,
       :since         => view.starting_revision,
-    })
+    }.merge(body))
   end
 
-  post('/views/:view_id/delete_segment') do |view_id|
+  post('/views/:view_id/delete_segments') do |view_id|
     view = View.find(view_id)
     body = JSON.parse(request.body.read, :symbolize_names => true)
     segments = body[:segments]
@@ -382,12 +386,12 @@ class Vault < Sinatra::Application
     }.merge(body))
   end
 
-  post('/views/:view_id/new_node') do |view_id|
+  post('/views/:view_id/new_nodes') do |view_id|
     view = View.find(view_id)
 
     body = JSON.parse(request.body.read, :symbolize_names => true)
-    if(body[:node].nil?)
-      raise(VaultException, "Required field: 'node'.")
+    if(body[:nodes].nil?)
+      raise(VaultException, "Required field: 'nodes'.")
     end
     if(body[:segment].nil?)
       raise(VaultException, "Required field: 'segment'.")
@@ -395,8 +399,8 @@ class Vault < Sinatra::Application
 
     view.create_nodes(
       :segment_name => body[:segment],
-      :nodes        => body[:node]
-    ) # TODO: Deal with pluralizations
+      :nodes        => body[:nodes],
+    )
     view.save()
 
     return view.to_json({
@@ -407,13 +411,13 @@ class Vault < Sinatra::Application
     }.merge(body))
   end
 
-  # TODO: How can this possibly work?
-  post('/views/:view_id/delete_node') do |view_id|
-    #body = JSON.parse(request.body.read, :symbolize_names => true)
+  post('/views/:view_id/delete_nodes') do |view_id|
+    body = JSON.parse(request.body.read, :symbolize_names => true)
 
     view = View.find(view_id)
-    nodes = JSON.parse(params['node'], :symbolize_names => true)
-    view.delete_nodes(nodes)
+    segment_name = body[:segment]
+    nodes = body[:nodes]
+    view.delete_nodes(segment_name, nodes)
     view.save()
 
     return view.to_json({
