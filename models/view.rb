@@ -527,16 +527,29 @@ class View < ActiveRecord::Base
     # Add the 'raw' bytes
     node[:raw] = Base64.encode64(segment[:data][offset, node[:length]])
 
-    # Get the metadata and add it to the node
-    meta = segment[:nodes_meta][address]
-    if(!meta.nil?)
-      node = node.merge(meta)
+    # Figure out some meta-data based on any nodes
+    node[:xrefs] = []
+    node[:revision] = segment[:start_revision] # Safe default
+
+    node[:address].upto(node[:address] + node[:length] - 1) do |a|
+      # Make sure we have some metadata
+      if(!segment[:nodes_meta][a].nil?)
+        # Take xrefs from child nodes
+        xrefs = segment[:nodes_meta][a][:xrefs]
+        if(!xrefs.nil?())
+          node[:xrefs] += xrefs
+        end
+
+        # Take the most recent revision of any nodes
+        revision = segment[:nodes_meta][a][:revision]
+        if(!revision.nil? && revision > node[:revision])
+          node[:revision] = revision
+        end
+      end
     end
 
-    # If the node doesn't have a revision, default it to the segment's starting
-    if(node[:revision].nil?)
-      node[:revision] = segment[:start_revision]
-    end
+    # Make sure the xrefs are unique and sorted
+    node[:xrefs] = node[:xrefs].uniq.sort
 
     return node
   end
