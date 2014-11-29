@@ -486,9 +486,21 @@ class View < ActiveRecord::Base
       raise(ViewException, "address was the wrong type!")
     end
 
+    # Get the offset into the node so we can handle the data properly
+    offset = address - segment[:address]
+
+    if(offset < 0)
+      raise(ViewException, "address was too small for the segment")
+    end
+    if(offset >= segment[:data].length)
+      raise(ViewException, "address was too big for the segment")
+    end
+
+    logger.warn("Getting node at %s:0x%08x" % [segment[:name], address])
+
     # Create either a real node or an undefined one
     if(segment[:nodes][address].nil?)
-      value = segment[:data][address].ord()
+      value = segment[:data][offset].ord()
       if(value >= 0x20 && value < 0x7F)
         value = "<undefined> 0x%02x ; '%c'" % [value, value]
       else
@@ -507,7 +519,7 @@ class View < ActiveRecord::Base
     end
 
     # Add the 'raw' bytes
-    node[:raw] = Base64.encode64(segment[:data][address, node[:length]])
+    node[:raw] = Base64.encode64(segment[:data][offset, node[:length]])
 
     # Get the metadata and add it to the node
     meta = segment[:nodes_meta][address]
@@ -604,8 +616,10 @@ class View < ActiveRecord::Base
 
         # The entry for this segment
         s = {
-          :name     => segment[:name],
-          :revision => segment[:revision],
+          :name         => segment[:name],
+          :revision     => segment[:revision],
+          :address      => segment[:address],
+          :file_address => segment[:file_address],
         }
 
         # Don't include the data if the requester doesn't want it
