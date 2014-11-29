@@ -419,8 +419,11 @@ class Vault < Sinatra::Application
 
     view = View.find(view_id)
     segment_name = body[:segment]
-    nodes = body[:nodes]
-    view.delete_nodes(segment_name, nodes)
+    addresses = body[:addresses]
+    view.delete_nodes({
+      :segment_name => segment_name,
+      :addresses    =>addresses
+    })
     view.save()
 
     return view.to_json({

@@ -400,7 +400,7 @@ class View < ActiveRecord::Base
 
       # Loop through the addresses we need to delete
       addresses.each do |address|
-        logger.warn("create_node(#{segment_name}, #{address})")
+        logger.warn("delete_node(%s, 0x%08x)" % [segment_name, address])
 
         # Get the node at that address
         node = segment[:nodes][address]
@@ -411,7 +411,7 @@ class View < ActiveRecord::Base
         end
 
         # Loop through the actual addresses
-        node[:address].upto(node[:address] + node[:length]) do |a|
+        node[:address].upto(node[:address] + node[:length] - 1) do |a|
           # Delete the entry at that address
           segment[:nodes].delete(a)
 
@@ -447,6 +447,9 @@ class View < ActiveRecord::Base
             if(segment[:nodes_meta][ref][:xrefs].length() == 0)
               segment[:nodes_meta][ref][:xrefs] = nil
             end
+
+            # Update the target node's revision number
+            segment[:nodes_meta][ref][:revision] = next_revision()
           end
         end
 
