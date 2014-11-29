@@ -162,15 +162,19 @@ class View < ActiveRecord::Base
   def create_segments(segments)
     undoable() do |undo|
       # Force segments into an array
-      if(!segments.is_a?(Hash))
-        raise(ViewException, "The 'segments' field has to be a hash")
+      if(!segments.is_a?(Array))
+        raise(ViewException, "The 'segments' field has to be an array")
       end
 
-      segments.each_pair do |name, segment|
-        logger.warn("create_segment(#{name}, #{segment.inspect})")
+      segments.each do |segment|
+        logger.warn("create_segment(#{segment.inspect})")
         # Do some sanity checks
-        if(!self.segments[name].nil?)
-          raise(ViewException, "A segment with that name already exists!")
+        if(segment[:address].nil?)
+          raise(ViewException, "The 'name' field is required when creating a segment")
+        end
+
+        if(!self.segments[segment[:name]].nil?)
+          raise(ViewException, "A segment with the name #{segment[:name]} already exists!")
         end
 
         if(segment[:address].nil?)
@@ -189,19 +193,19 @@ class View < ActiveRecord::Base
         segment[:xrefs]      = []
 
         # Store the new segment
-        self.segments[name] = segment
+        self.segments[segment[:name]] = segment
 
         # Make a note of it for the undo buffer
         undo.record_action(
           :forward => {
             :type   => :method,
             :method => :create_segments,
-            :params => {name => segment},
+            :params => [segment],
           },
           :backward => {
             :type   => :method,
             :method => :delete_segments,
-            :params => name,
+            :params => segment[:name],
           }
         )
       end
@@ -216,14 +220,14 @@ class View < ActiveRecord::Base
       end
 
       names.each do |name|
-        if(name.is_a?(String))
-          name = name.to_sym
-        end
+#        if(name.is_a?(Symbol))
+#          name = name.to_s
+#        end
 
         logger.warn("delete_segment(#{name.inspect})")
         segment = self.segments[name]
         if(segment.nil?)
-          raise(ViewException, "A segment with that name could not be found!")
+          raise(ViewException, "A segment with the name '#{name}':#{name.class} could not be found! Known segments: #{self.segments.keys.join(", ")}")
         end
 
         # Make sure it doesn't have any nodes
@@ -247,7 +251,7 @@ class View < ActiveRecord::Base
           :backward => {
             :type   => :method,
             :method => :create_segments,
-            :params => {name => segment},
+            :params => [segment],
           }
         )
       end
@@ -265,7 +269,7 @@ class View < ActiveRecord::Base
       # Get the segment and make sure it exists
       segment = self.segments[segment_name]
       if(segment.nil?)
-        raise(ViewException, "A segment with that name could not be found!")
+        raise(ViewException, "A segment with the name '#{segment_name}':#{segment_name.class} could not be found! Known segments: #{self.segments.keys.join(", ")}")
       end
 
       # Make sure the nodes were pased
@@ -377,7 +381,7 @@ class View < ActiveRecord::Base
       # Get the segment and make sure it exists
       segment = self.segments[segment_name]
       if(segment.nil?)
-        raise(ViewException, "A segment with the name '#{segment_name}' could not be found! Known segments: #{self.segments.keys.join(", ")}")
+        raise(ViewException, "A segment with the name '#{segment_name}':#{segment_name.class} could not be found! Known segments: #{self.segments.keys.join(", ")}")
       end
 
       addresses = params[:addresses]
@@ -534,7 +538,7 @@ class View < ActiveRecord::Base
     # Get the segment and make sure it exists
     segment = self.segments[segment_name]
     if(segment.nil?)
-      raise(ViewException, "A segment with that name could not be found!")
+      raise(ViewException, "A segment with the name '#{segment[:name]}':#{segment[:name].class} could not be found! Known segments: #{self.segments.keys.join(", ")}")
     end
 
     results = {}
@@ -585,11 +589,11 @@ class View < ActiveRecord::Base
     end
 
     if(with_segments)
-      result[:segments] = {}
+      result[:segments] = []
 
       self.segments.each_pair do |name, segment|
         # If the user wanted a specific segment name
-        if(!params[:names].nil? && !params[:names].include?(name.to_s))
+        if(!params[:names].nil? && !params[:names].include?(segment[:name].to_s))
           next
         end
 
@@ -600,6 +604,7 @@ class View < ActiveRecord::Base
 
         # The entry for this segment
         s = {
+          :name     => segment[:name],
           :revision => segment[:revision],
         }
 
@@ -613,7 +618,7 @@ class View < ActiveRecord::Base
           s[:nodes] = get_nodes(params.merge({:segment_name => name}))
         end
 
-        result[:segments][name] = s
+        result[:segments] << s
       end
     end
 

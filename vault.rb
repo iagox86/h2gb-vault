@@ -354,9 +354,9 @@ class Vault < Sinatra::Application
     body = JSON.parse(request.body.read, :symbolize_names => true)
     view = View.find(view_id)
 
-    # Fix the base64
+    # Convert the segment names to strings instead of symbols
     segments = body.delete(:segments)
-    segments.each_pair do |name, segment|
+    segments.each do |segment|
       segment[:data] = Base64.decode64(segment[:data])
     end
 
@@ -401,7 +401,7 @@ class Vault < Sinatra::Application
     end
 
     view.create_nodes(
-      :segment_name => body[:segment].to_sym,
+      :segment_name => body[:segment],
       :nodes        => body[:nodes],
     )
     view.save()
