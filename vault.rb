@@ -10,7 +10,6 @@ require 'models/workspace'
 require 'json'
 
 # Disable verbose logging
-ActiveRecord::Base.logger.sev_threshold = Logger::WARN
 
 # Database stuff
 ActiveRecord::Base.establish_connection(
@@ -99,6 +98,10 @@ class Vault < Sinatra::Application
     return result
   end
 
+  before do
+    ActiveRecord::Base.logger.sev_threshold = Logger::WARN
+    #logger.warn("Setting logging to WARN")
+  end
   # Add important headers and encode everything as JSON
   after do
     if(response.content_type.nil?)
