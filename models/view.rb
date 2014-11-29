@@ -187,15 +187,13 @@ class View < ActiveRecord::Base
         # Save the revision
         segment[:revision] = next_revision()
 
+        # Save the initial revision
+        segment[:start_revision] = next_revision()
+
         # Create the 'special' fields
         segment[:nodes]      = {}
         segment[:xrefs]      = []
-
-        # Default the revision of all unknown nodes to when the segment was created
         segment[:nodes_meta] = {}
-        segment[:address].upto(segment[:address] + segment[:data].length - 1) do |i|
-          segment[:nodes_meta][i] = {:revision => next_revision()}
-        end
 
         # Store the new segment
         self.segments[segment[:name]] = segment
@@ -532,10 +530,9 @@ class View < ActiveRecord::Base
       node = node.merge(meta)
     end
 
-    # If the node doesn't have a revision, default it to the segment's revision
+    # If the node doesn't have a revision, default it to the segment's starting
     if(node[:revision].nil?)
-      logger.error("A node didn't have a revision! Is that okay?")
-      node[:revision] = 0
+      node[:revision] = segment[:start_revision]
     end
 
     return node
