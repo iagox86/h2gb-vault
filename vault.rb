@@ -9,6 +9,8 @@ require 'models/workspace'
 
 require 'json'
 
+require 'pp' # TODO: DEBUG
+
 # Disable verbose logging
 ActiveRecord::Base.logger.sev_threshold = Logger::WARN
 
@@ -350,11 +352,9 @@ class Vault < Sinatra::Application
     view = View.find(view_id)
 
     # Fix the base64
-    segments = to_a(body.delete(:segments))
-    segments.map do |segment|
+    segments = body.delete(:segments)
+    segments.each_pair do |name, segment|
       segment[:data] = Base64.decode64(segment[:data])
-
-      segment # return
     end
 
     # Loop through the one or more segments we need to create and do them
@@ -398,7 +398,7 @@ class Vault < Sinatra::Application
     end
 
     view.create_nodes(
-      :segment_name => body[:segment],
+      :segment_name => body[:segment].to_sym,
       :nodes        => body[:nodes],
     )
     view.save()
