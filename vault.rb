@@ -464,6 +464,23 @@ class Vault < Sinatra::Application
     return result
   end
 
+  post('/views/:view_id/clear_undo_log') do |view_id|
+    body = JSON.parse(request.body.read, :symbolize_names => true)
+
+    view = View.find(view_id)
+    view.clear_undo_log()
+    view.save()
+
+    result = view.to_json({
+      :with_segments => true, # These defaults will be overridden by the user's request
+      :with_data     => false,
+      :with_nodes    => true,
+      :since         => view.starting_revision,
+    }.merge(body))
+
+    return result
+  end
+
   post('/views/:view_id/redo') do |view_id|
     body = JSON.parse(request.body.read, :symbolize_names => true)
 

@@ -130,6 +130,11 @@ module Undoable
       :redo => self.redo_buffer,
     }
   end
+
+  def clear_undo_log()
+    self.undo_buffer = []
+    self.redo_buffer = []
+  end
 end
 
 class View < ActiveRecord::Base
