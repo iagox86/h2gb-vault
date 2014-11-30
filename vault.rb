@@ -86,6 +86,15 @@ class Vault < Sinatra::Application
   end
 
   before do
+    # Do an ugly check to see if we're using a version of Sinatra that doesn't expose the params
+    begin
+      if(params.nil?)
+        raise(VaultException, "Control-flow exceptions are bad")
+      end
+    rescue
+      raise(VaultException, "It looks like there's a problem in the before() function, updating Sinatra will likely fix it")
+    end
+
     # Truthify the parameters
     result = {}
     params.each_pair do |k, v|
