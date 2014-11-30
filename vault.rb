@@ -83,7 +83,9 @@ class Vault < Sinatra::Application
   before do
     # Turn down the logging
     ActiveRecord::Base.logger.sev_threshold = Logger::WARN
+  end
 
+  before do
     # Truthify the parameters
     result = {}
     params.each_pair do |k, v|
