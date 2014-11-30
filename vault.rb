@@ -389,6 +389,19 @@ class Vault < Sinatra::Application
     }.merge(body))
   end
 
+  post('/views/:view_id/delete_all_segments') do |view_id|
+    view = View.find(view_id)
+    view.delete_all_segments()
+    view.save()
+
+    return view.to_json({
+      :with_segments => true, # These defaults will be overridden by the user's request
+      :with_data     => false,
+      :with_nodes    => false,
+      :since         => view.starting_revision,
+    }.merge(body))
+  end
+
   post('/views/:view_id/new_nodes') do |view_id|
     view = View.find(view_id)
 

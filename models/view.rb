@@ -261,6 +261,11 @@ class View < ActiveRecord::Base
     end
   end
 
+  def delete_all_segments()
+    # Do this view delete_segments so we get undo for free
+    delete_segments(self.segments.keys)
+  end
+
   def create_nodes(params)
     undoable() do |undo|
       # Make sure a segment name was passed in
