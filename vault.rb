@@ -162,13 +162,13 @@ class Vault < Sinatra::Application
     body = JSON.parse(request.body.read, :symbolize_names => true)
 
     b = Binary.new(
-      :name         => body[:name],
-      :comment      => body[:comment],
-      :data         => Base64.decode64(body[:data]),
+      :name         => body.delete(:name),
+      :comment      => body.delete(:comment),
+      :data         => Base64.decode64(body.delete(:data)),
     )
     b.save()
 
-    return b.to_json()
+    return b.to_json(body)
   end
 
   # List binaries (note: doesn't return file contents)
@@ -188,19 +188,19 @@ class Vault < Sinatra::Application
 
     b = Binary.find(binary_id)
     if(!body[:name].nil?)
-      b.name = body[:name]
+      b.name = body.delete(:name)
     end
 
     if(!body[:comment].nil?)
-      b.comment = body[:comment]
+      b.comment = body.delete(:comment)
     end
 
     if(!body[:data].nil?)
-      b.data = Base64.decode64(body[:data]) # TODO: Make this encode/decode magic
+      b.data = Base64.decode64(body.delete(:data))
     end
     b.save()
 
-    return b.to_json()
+    return b.to_json(body)
   end
 
   # Delete binary
@@ -215,10 +215,10 @@ class Vault < Sinatra::Application
     body = JSON.parse(request.body.read, :symbolize_names => true)
 
     b = Binary.find(binary_id)
-    w = b.workspaces.new(:name => body[:name])
+    w = b.workspaces.new(:name => body.delete(:name))
     w.save()
 
-    return w.to_json()
+    return w.to_json(body)
   end
 
   get('/binaries/:binary_id/workspaces') do |binary_id|
@@ -231,7 +231,7 @@ class Vault < Sinatra::Application
   get('/workspaces/:workspace_id') do |workspace_id|
     w = Workspace.find(workspace_id)
 
-    return w.to_json()
+    return w.to_json(make_truthy(params)) # TODO: Can I make make_truthy happen by default?
   end
 
   # Update workspace
@@ -239,10 +239,10 @@ class Vault < Sinatra::Application
     body = JSON.parse(request.body.read, :symbolize_names => true)
 
     w = Workspace.find(workspace_id)
-    w.name = body[:name]
+    w.name = body.delete(:name)
     w.save()
 
-    return w.to_json()
+    return w.to_json(body)
   end
 
   delete('/workspaces/:workspace_id') do |workspace_id|
