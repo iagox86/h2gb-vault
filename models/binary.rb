@@ -1,6 +1,7 @@
 $LOAD_PATH << File.dirname(__FILE__)
 
 require 'model'
+require 'model_properties'
 
 require 'sinatra'
 require 'sinatra/activerecord'
@@ -10,10 +11,13 @@ require 'securerandom'
 class Binary < ActiveRecord::Base
   attr_accessor :data
   include Model
+  include ModelProperties
 
   # Because I'm using UUIDs for the primary key, this needs to be defined
 #  self.primary_key = :id
   self.has_many(:workspaces)
+
+  serialize(:properties, Hash)
 
   # TODO: Fix the upload path
   UPLOAD_PATH = "/tmp" #File.dirname(__FILE__) + "/uploads"
@@ -24,6 +28,8 @@ class Binary < ActiveRecord::Base
     if(@data.nil?)
       raise(Exception, "No data was provided")
     end
+
+    params[:properties] ||= {}
 
     # Create a UUID instead of using a 'real' id
 #    params[:id] = SecureRandom.uuid
@@ -78,6 +84,7 @@ class Binary < ActiveRecord::Base
       :binary_id  => self.id,
       :name       => self.name,
       :comment    => self.comment,
+      :properties => self.properties,
     }
 
     if(params[:with_data])

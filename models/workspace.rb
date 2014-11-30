@@ -3,28 +3,22 @@
 # By Ron Bowes
 
 require 'model'
+require 'model_properties'
+
 require 'sinatra/activerecord'
 
 class Workspace < ActiveRecord::Base
   include Model
+  include ModelProperties
 
   belongs_to(:binary)
   has_many(:views)
-  serialize(:settings, Hash)
+  serialize(:properties, Hash)
 
   def initialize(params = {})
-    if(params[:settings].nil?)
-      params[:settings] = {}
-    end
+    params[:properties] ||= {}
+
     super(params)
-  end
-
-  def set(name, value)
-    self.settings[name] = value
-  end
-
-  def get(name)
-    return self.settings[name]
   end
 
   def to_json(params = {})
@@ -32,7 +26,7 @@ class Workspace < ActiveRecord::Base
       :workspace_id => self.id,
       :binary_id    => self.binary_id,
       :name         => self.name,
-      :settings     => self.settings
+      :properties   => self.properties,
     }
   end
 end

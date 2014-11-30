@@ -4,7 +4,8 @@
 
 $LOAD_PATH << File.dirname(__FILE__)
 
-require 'model.rb'
+require 'model'
+require 'model_properties'
 
 require 'json'
 require 'sinatra/activerecord'
@@ -139,17 +140,21 @@ end
 
 class View < ActiveRecord::Base
   include Model
+  include ModelProperties
   include Undoable
 
   belongs_to(:workspace)
 
-  serialize(:undo_buffer)
-  serialize(:redo_buffer)
-  serialize(:segments)
+  serialize(:properties,  Hash)
+  serialize(:undo_buffer, Array)
+  serialize(:redo_buffer, Array)
+  serialize(:segments,    Hash)
 
   attr_reader :starting_revision
 
   def initialize(params = {})
+    params[:properties] ||= {}
+
     super(params.merge({
       :undo_buffer => [],
       :redo_buffer => [],
@@ -620,6 +625,7 @@ class View < ActiveRecord::Base
       :workspace_id => workspace.id,
       :name         => self.name,
       :revision     => self.revision,
+      :properties   => self.properties,
     }
 
     # Ensure the names argument is always an array

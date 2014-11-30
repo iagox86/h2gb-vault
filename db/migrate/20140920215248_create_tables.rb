@@ -4,6 +4,8 @@ class CreateTables < ActiveRecord::Migration
 #      t.string(:id, :limit => 36, :primary => true, :null => false)
 
       t.string(:name)
+      t.text(:properties)
+
       t.string(:filename)
       t.string(:comment)
 
@@ -14,7 +16,7 @@ class CreateTables < ActiveRecord::Migration
       t.belongs_to(:binary)
 
       t.string(:name)
-      t.text(:settings)
+      t.text(:properties)
 
       t.timestamps()
     end
@@ -23,6 +25,7 @@ class CreateTables < ActiveRecord::Migration
       t.belongs_to(:workspace)
 
       t.string(:name)
+      t.text(:properties)
 
       t.text(:undo_buffer)
       t.text(:redo_buffer)

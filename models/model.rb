@@ -13,7 +13,9 @@ module Model
   end
 
   def to_json(params = {})
-    raise(NotImplementedError, "to_json() needs to be overridden!")
+    return {
+      :properties => self.properties,
+    }
   end
 
   def as_json(p = {})

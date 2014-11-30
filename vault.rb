@@ -180,7 +180,6 @@ class Vault < Sinatra::Application
     return "Welcome to h2gb! If you don't know what to do, you probably don't need to be here. :)"
   end
 
-  # Create a binary
   post('/binaries') do
     b = Binary.new(
       :name         => params.delete(:name),
@@ -192,18 +191,15 @@ class Vault < Sinatra::Application
     return b.to_json(params)
   end
 
-  # List binaries (note: doesn't return file contents)
   get('/binaries') do
     return {:binaries => Binary.all_to_json(params) }
   end
 
-  # Download a binary
   get('/binaries/:binary_id') do |binary_id|
     b = Binary.find(binary_id)
     return b.to_json(params)
   end
 
-  # Update binary
   put('/binaries/:binary_id') do |binary_id|
     b = Binary.find(binary_id)
     if(!params[:name].nil?)
@@ -222,12 +218,32 @@ class Vault < Sinatra::Application
     return b.to_json(params)
   end
 
-  # Delete binary
   delete('/binaries/:binary_id') do |binary_id|
     b = Binary.find(binary_id)
     b.destroy()
 
     return {:deleted => true}
+  end
+
+  post('/binaries/:binary_id/set_properties') do |binary_id|
+    b = Binary.find(binary_id)
+
+    properties = params.delete(:properties)
+    if(!properties.is_a?(Hash))
+      raise(VaultException, "The :properties parameter is mandatory, and must be a hash")
+    end
+
+    b.set_properties(properties)
+    b.save()
+
+    return b.to_json(params)
+  end
+
+  post('/binaries/:binary_id/get_properties') do |binary_id|
+    b = Binary.find(binary_id)
+    keys = params.delete(:keys)
+    result = b.get_properties(keys)
+    return result
   end
 
   post('/binaries/:binary_id/new_workspace') do |binary_id|
@@ -267,44 +283,25 @@ class Vault < Sinatra::Application
     return {:deleted => true}
   end
 
-  # Get setting
-  get('/workspaces/:workspace_id/get') do |workspace_id|
-    w = Workspace.find(workspace_id)
-    name = params['name']
-
-    # TODO: Rename this to key/value to be less confusing
-    return add_status(0, {:name => name, :value => w.get(name)})
-  end
-
-  # Set setting
-  post('/workspaces/:workspace_id/set') do |workspace_id|
+  post('/workspaces/:workspace_id/set_properties') do |workspace_id|
     w = Workspace.find(workspace_id)
 
-    # Make sure it's an array
-    if(params.is_a?(Hash))
-      params = [params]
+    properties = params.delete(:properties)
+    if(!properties.is_a?(Hash))
+      raise(VaultException, "The :properties parameter is mandatory, and must be a hash")
     end
 
-    # Make sure the params is sane
-    if(!params.is_a?(Array))
-      raise(VaultException, "The 'set' command requires an hash (or an array of hashes) containing 'name' and 'value' fields")
-    end
-
-    # Loop through the params
-    params.each do |kv|
-      name  = kv[:name]
-      value = kv[:value]
-
-      # Make sure we have a sane name
-      if(!name.is_a?(String))
-        raise(VaultException, "The 'set' command requires a hash (or an array of hashes) containing 'name' and 'value' fields")
-      end
-
-      w.set(name, value)
-    end
+    w.set_properties(properties)
     w.save()
 
-    return add_status(0, {})
+    return w.to_json(params)
+  end
+
+  post('/workspaces/:workspace_id/get_properties') do |workspace_id|
+    w = Workspace.find(workspace_id)
+    keys = params.delete(:keys)
+    result = w.get_properties(keys)
+    return result
   end
 
   # Create view
@@ -354,10 +351,31 @@ class Vault < Sinatra::Application
 
   # Delete view
   delete('/views/:view_id') do |view_id|
-    b = View.find(view_id)
-    b.destroy()
+    v = View.find(view_id)
+    v.destroy()
 
     return {:deleted => true}
+  end
+
+  post('/views/:view_id/set_properties') do |view_id|
+    v = View.find(view_id)
+
+    properties = params.delete(:properties)
+    if(!properties.is_a?(Hash))
+      raise(VaultException, "The :properties parameter is mandatory, and must be a hash")
+    end
+
+    v.set_properties(properties)
+    v.save()
+
+    return v.to_json(params)
+  end
+
+  post('/views/:view_id/get_properties') do |view_id|
+    v = View.find(view_id)
+    keys = params.delete(:keys)
+    result = v.get_properties(keys)
+    return result
   end
 
   post('/views/:view_id/new_segments') do |view_id|
