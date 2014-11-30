@@ -80,10 +80,13 @@ class Vault < Sinatra::Application
     end
   end
 
-  def make_truthy(h)
-    result = {}
+  before do
+    # Turn down the logging
+    ActiveRecord::Base.logger.sev_threshold = Logger::WARN
 
-    h.each_pair do |k, v|
+    # Truthify the parameters
+    result = {}
+    params.each_pair do |k, v|
       if(v == '')
         v = nil
       elsif(v == 'true')
@@ -97,13 +100,9 @@ class Vault < Sinatra::Application
       result[k.to_sym] = v
     end
 
-    return result
+    params.merge!(result)
   end
 
-  before do
-    ActiveRecord::Base.logger.sev_threshold = Logger::WARN
-    #logger.warn("Setting logging to WARN")
-  end
   # Add important headers and encode everything as JSON
   after do
     if(response.content_type.nil?)
@@ -173,13 +172,13 @@ class Vault < Sinatra::Application
 
   # List binaries (note: doesn't return file contents)
   get('/binaries') do
-    return {:binaries => Binary.all_to_json(make_truthy(params)) }
+    return {:binaries => Binary.all_to_json(params) }
   end
 
   # Download a binary
   get('/binaries/:binary_id') do |binary_id|
     b = Binary.find(binary_id)
-    return b.to_json(make_truthy(params))
+    return b.to_json(params)
   end
 
   # Update binary
@@ -231,7 +230,7 @@ class Vault < Sinatra::Application
   get('/workspaces/:workspace_id') do |workspace_id|
     w = Workspace.find(workspace_id)
 
-    return w.to_json(make_truthy(params)) # TODO: Can I make make_truthy happen by default?
+    return w.to_json(params)
   end
 
   # Update workspace
@@ -311,7 +310,7 @@ class Vault < Sinatra::Application
     return {
       :views => View.all_to_json({
         :all => w.views.all()
-      }.merge(make_truthy(params))
+      }.merge(params)
     )}
   end
 
@@ -323,7 +322,7 @@ class Vault < Sinatra::Application
       :with_segments => false, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => false,
-    }.merge(make_truthy(params)))
+    }.merge(params))
   end
 
   # Update view
@@ -512,7 +511,7 @@ class Vault < Sinatra::Application
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => false,
-    }.merge(make_truthy(params)))
+    }.merge(params))
   end
 
   get('/views/:view_id/nodes') do |view_id|
@@ -522,7 +521,7 @@ class Vault < Sinatra::Application
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => true,
-    }.merge(make_truthy(params)))
+    }.merge(params))
   end
 
   get('/views/:view_id/debug/undo_log') do |view_id|
