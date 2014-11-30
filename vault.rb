@@ -102,7 +102,20 @@ class Vault < Sinatra::Application
       result[k.to_sym] = v
     end
 
+    # Clear out all other parameters
+    params.clear()
+
+    # Merge in the fixed ones
     params.merge!(result)
+
+    # Merge in body parameters if they're present
+    if(request.body.present?)
+      body = request.body.read()
+
+      if(body.length > 0)
+        params.merge!(JSON.parse(body, :symbolize_names => true))
+      end
+    end
   end
 
   # Add important headers and encode everything as JSON
@@ -160,16 +173,14 @@ class Vault < Sinatra::Application
 
   # Create a binary
   post('/binaries') do
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-
     b = Binary.new(
-      :name         => body.delete(:name),
-      :comment      => body.delete(:comment),
-      :data         => Base64.decode64(body.delete(:data)),
+      :name         => params.delete(:name),
+      :comment      => params.delete(:comment),
+      :data         => Base64.decode64(params.delete(:data)),
     )
     b.save()
 
-    return b.to_json(body)
+    return b.to_json(params)
   end
 
   # List binaries (note: doesn't return file contents)
@@ -185,23 +196,21 @@ class Vault < Sinatra::Application
 
   # Update binary
   put('/binaries/:binary_id') do |binary_id|
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-
     b = Binary.find(binary_id)
-    if(!body[:name].nil?)
-      b.name = body.delete(:name)
+    if(!params[:name].nil?)
+      b.name = params.delete(:name)
     end
 
-    if(!body[:comment].nil?)
-      b.comment = body.delete(:comment)
+    if(!params[:comment].nil?)
+      b.comment = params.delete(:comment)
     end
 
-    if(!body[:data].nil?)
-      b.data = Base64.decode64(body.delete(:data))
+    if(!params[:data].nil?)
+      b.data = Base64.decode64(params.delete(:data))
     end
     b.save()
 
-    return b.to_json(body)
+    return b.to_json(params)
   end
 
   # Delete binary
@@ -213,13 +222,11 @@ class Vault < Sinatra::Application
   end
 
   post('/binaries/:binary_id/new_workspace') do |binary_id|
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-
     b = Binary.find(binary_id)
-    w = b.workspaces.new(:name => body.delete(:name))
+    w = b.workspaces.new(:name => params.delete(:name))
     w.save()
 
-    return w.to_json(body)
+    return w.to_json(params)
   end
 
   get('/binaries/:binary_id/workspaces') do |binary_id|
@@ -237,13 +244,11 @@ class Vault < Sinatra::Application
 
   # Update workspace
   put('/workspaces/:workspace_id') do |workspace_id|
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-
     w = Workspace.find(workspace_id)
-    w.name = body.delete(:name)
+    w.name = params.delete(:name)
     w.save()
 
-    return w.to_json(body)
+    return w.to_json(params)
   end
 
   delete('/workspaces/:workspace_id') do |workspace_id|
@@ -264,22 +269,20 @@ class Vault < Sinatra::Application
 
   # Set setting
   post('/workspaces/:workspace_id/set') do |workspace_id|
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-
     w = Workspace.find(workspace_id)
 
     # Make sure it's an array
-    if(body.is_a?(Hash))
-      body = [body]
+    if(params.is_a?(Hash))
+      params = [params]
     end
 
-    # Make sure the body is sane
-    if(!body.is_a?(Array))
+    # Make sure the params is sane
+    if(!params.is_a?(Array))
       raise(VaultException, "The 'set' command requires an hash (or an array of hashes) containing 'name' and 'value' fields")
     end
 
-    # Loop through the body
-    body.each do |kv|
+    # Loop through the params
+    params.each do |kv|
       name  = kv[:name]
       value = kv[:value]
 
@@ -297,12 +300,11 @@ class Vault < Sinatra::Application
 
   # Create view
   post('/workspaces/:workspace_id/new_view') do |workspace_id|
-    body = JSON.parse(request.body.read, :symbolize_names => true)
     w = Workspace.find(workspace_id)
 
-    view = w.views.new(:name => body.delete(:name))
+    view = w.views.new(:name => params.delete(:name))
     view.save()
-    return view.to_json(body)
+    return view.to_json(params)
   end
 
   # Get views for a workspace
@@ -330,17 +332,15 @@ class Vault < Sinatra::Application
   # Update view
   # TODO: Make sure this is being tested
   put('/views/:view_id') do |view_id|
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-
     v = View.find(view_id)
-    v.name = body[:name]
+    v.name = params[:name]
     v.save()
 
     return v.to_json({
       :with_segments => false, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => false,
-    }.merge(body))
+    }.merge(params))
   end
 
   # Delete view
@@ -352,11 +352,10 @@ class Vault < Sinatra::Application
   end
 
   post('/views/:view_id/new_segments') do |view_id|
-    body = JSON.parse(request.body.read, :symbolize_names => true)
     view = View.find(view_id)
 
     # Convert the segment names to strings instead of symbols
-    segments = body.delete(:segments)
+    segments = params.delete(:segments)
     segments.each do |segment|
       segment[:data] = Base64.decode64(segment[:data])
     end
@@ -370,13 +369,12 @@ class Vault < Sinatra::Application
       :with_data     => false,
       :with_nodes    => false,
       :since         => view.starting_revision,
-    }.merge(body))
+    }.merge(params))
   end
 
   post('/views/:view_id/delete_segments') do |view_id|
     view = View.find(view_id)
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-    segments = body[:segments]
+    segments = params[:segments]
 
     # Delete the segments
     view.delete_segments(segments)
@@ -387,7 +385,7 @@ class Vault < Sinatra::Application
       :with_data     => false,
       :with_nodes    => false,
       :since         => view.starting_revision,
-    }.merge(body))
+    }.merge(params))
   end
 
   post('/views/:view_id/delete_all_segments') do |view_id|
@@ -395,30 +393,27 @@ class Vault < Sinatra::Application
     view.delete_all_segments()
     view.save()
 
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-
     return view.to_json({
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => false,
       :since         => view.starting_revision,
-    }.merge(body))
+    }.merge(params))
   end
 
   post('/views/:view_id/new_nodes') do |view_id|
     view = View.find(view_id)
 
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-    if(body[:nodes].nil?)
+    if(params[:nodes].nil?)
       raise(VaultException, "Required field: 'nodes'.")
     end
-    if(body[:segment].nil?)
+    if(params[:segment].nil?)
       raise(VaultException, "Required field: 'segment'.")
     end
 
     view.create_nodes(
-      :segment_name => body[:segment],
-      :nodes        => body[:nodes],
+      :segment_name => params[:segment],
+      :nodes        => params[:nodes],
     )
     view.save()
 
@@ -427,15 +422,13 @@ class Vault < Sinatra::Application
       :with_data     => false,
       :with_nodes    => true,
       :since         => view.starting_revision,
-    }.merge(body))
+    }.merge(params))
   end
 
   post('/views/:view_id/delete_nodes') do |view_id|
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-
     view = View.find(view_id)
-    segment_name = body[:segment]
-    addresses = body[:addresses]
+    segment_name = params[:segment]
+    addresses = params[:addresses]
     view.delete_nodes({
       :segment_name => segment_name,
       :addresses    =>addresses
@@ -447,12 +440,10 @@ class Vault < Sinatra::Application
       :with_data     => false,
       :with_nodes    => true,
       :since         => view.starting_revision,
-    }.merge(body))
+    }.merge(params))
   end
 
   post('/views/:view_id/undo') do |view_id|
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-
     view = View.find(view_id)
     view.undo()
     view.save()
@@ -462,14 +453,12 @@ class Vault < Sinatra::Application
       :with_data     => false,
       :with_nodes    => true,
       :since         => view.starting_revision,
-    }.merge(body))
+    }.merge(params))
 
     return result
   end
 
   post('/views/:view_id/clear_undo_log') do |view_id|
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-
     view = View.find(view_id)
     view.clear_undo_log()
     view.save()
@@ -479,14 +468,12 @@ class Vault < Sinatra::Application
       :with_data     => false,
       :with_nodes    => true,
       :since         => view.starting_revision,
-    }.merge(body))
+    }.merge(params))
 
     return result
   end
 
   post('/views/:view_id/redo') do |view_id|
-    body = JSON.parse(request.body.read, :symbolize_names => true)
-
     view = View.find(view_id)
     view.redo()
     view.save()
@@ -496,7 +483,7 @@ class Vault < Sinatra::Application
       :with_data     => false,
       :with_nodes    => true,
       :since         => view.starting_revision,
-    }.merge(body))
+    }.merge(params))
   end
 
   get('/views/:view_id/segments') do |view_id|
