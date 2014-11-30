@@ -394,6 +394,8 @@ class Vault < Sinatra::Application
     view.delete_all_segments()
     view.save()
 
+    body = JSON.parse(request.body.read, :symbolize_names => true)
+
     return view.to_json({
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
