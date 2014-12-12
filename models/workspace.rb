@@ -1,8 +1,6 @@
-# view.rb
+# workspace.rb
 # By Ron Bowes
 # Created October 6, 2014
-
-$LOAD_PATH << File.dirname(__FILE__)
 
 require 'model'
 require 'model_properties'
@@ -11,20 +9,7 @@ require 'json'
 require 'sinatra/activerecord'
 require 'logger'
 
-require 'pp' # TODO: Debug
-
-if(ARGV[0] == "testview")
-  ActiveRecord::Base.establish_connection(
-    :adapter => 'sqlite3',
-    :host    => nil,
-    :username => nil,
-    :password => nil,
-    :database => 'data.db',
-    :encoding => 'utf8',
-  )
-end
-
-class ViewException < StandardError
+class WorkspaceException < StandardError
 end
 
 module Undoable
@@ -54,12 +39,12 @@ module Undoable
   def record_action(params = {})
     forward = params[:forward]
     if(forward.nil?)
-      raise(ViewException, "record_action requires a :forward parameter!")
+      raise(WorkspaceException, "record_action requires a :forward parameter!")
     end
 
     backward = params[:backward]
     if(backward.nil?)
-      raise(ViewException, "record_action requires a :backward parameter!")
+      raise(WorkspaceException, "record_action requires a :backward parameter!")
     end
 
     if(@undoing)
@@ -94,7 +79,7 @@ module Undoable
       elsif(action[:type] == :method)
         self.send(action[:backward][:method], action[:backward][:params])
       else
-        raise(ViewException, "Unknown action type: #{action[:type]}")
+        raise(WorkspaceException, "Unknown action type: #{action[:type]}")
       end
     end
 
@@ -118,7 +103,7 @@ module Undoable
       elsif(action[:type] == :method)
         self.send(action[:forward][:method], action[:forward][:params])
       else
-        raise(ViewException, "Unknown action type: #{action[:type]}")
+        raise(WorkspaceException, "Unknown action type: #{action[:type]}")
       end
     end
 
@@ -138,7 +123,7 @@ module Undoable
   end
 end
 
-class View < ActiveRecord::Base
+class Workspace < ActiveRecord::Base
   include Model
   include ModelProperties
   include Undoable
@@ -173,25 +158,25 @@ class View < ActiveRecord::Base
     undoable() do |undo|
       # Force segments into an array
       if(!segments.is_a?(Array))
-        raise(ViewException, "The 'segments' field has to be an array")
+        raise(WorkspaceException, "The 'segments' field has to be an array")
       end
 
       segments.each do |segment|
         logger.warn("create_segment(#{segment.inspect})")
         # Do some sanity checks
         if(segment[:address].nil?)
-          raise(ViewException, "The 'name' field is required when creating a segment")
+          raise(WorkspaceException, "The 'name' field is required when creating a segment")
         end
 
         if(!self.segments[segment[:name]].nil?)
-          raise(ViewException, "A segment with the name #{segment[:name]} already exists!")
+          raise(WorkspaceException, "A segment with the name #{segment[:name]} already exists!")
         end
 
         if(segment[:address].nil?)
-          raise(ViewException, "The 'address' field is required when creating a segment")
+          raise(WorkspaceException, "The 'address' field is required when creating a segment")
         end
         if(segment[:data].nil?)
-          raise(ViewException, "The 'data' field is required when creating a segment")
+          raise(WorkspaceException, "The 'data' field is required when creating a segment")
         end
 
         # Save the revision
@@ -240,7 +225,7 @@ class View < ActiveRecord::Base
         logger.warn("delete_segment(#{name.inspect})")
         segment = self.segments[name]
         if(segment.nil?)
-          raise(ViewException, "A segment with the name '#{name}':#{name.class} could not be found! Known segments: #{self.segments.keys.join(", ")}")
+          raise(WorkspaceException, "A segment with the name '#{name}':#{name.class} could not be found! Known segments: #{self.segments.keys.join(", ")}")
         end
 
         # Make sure it doesn't have any nodes
@@ -272,7 +257,7 @@ class View < ActiveRecord::Base
   end
 
   def delete_all_segments()
-    # Do this view delete_segments so we get undo for free
+    # Do this workspace delete_segments so we get undo for free
     delete_segments(self.segments.keys)
   end
 
@@ -281,19 +266,19 @@ class View < ActiveRecord::Base
       # Make sure a segment name was passed in
       segment_name = params[:segment_name]
       if(segment_name.nil?)
-        raise(ViewException, ":segment_name is required")
+        raise(WorkspaceException, ":segment_name is required")
       end
 
       # Get the segment and make sure it exists
       segment = self.segments[segment_name]
       if(segment.nil?)
-        raise(ViewException, "A segment with the name '#{segment_name}':#{segment_name.class} could not be found! Known segments: #{self.segments.keys.join(", ")}")
+        raise(WorkspaceException, "A segment with the name '#{segment_name}':#{segment_name.class} could not be found! Known segments: #{self.segments.keys.join(", ")}")
       end
 
       # Make sure the nodes were pased
       nodes = params[:nodes]
       if(nodes.nil?)
-        raise(ViewException, ":nodes is required")
+        raise(WorkspaceException, ":nodes is required")
       end
 
       # Force nodes into being an array TODO: Create a method for this
@@ -306,22 +291,22 @@ class View < ActiveRecord::Base
         logger.warn("create_node(#{segment_name}, #{node.inspect})")
         # Sanity checks
         if(node[:type].nil?)
-          raise(ViewException, "The 'type' field is required!")
+          raise(WorkspaceException, "The 'type' field is required!")
         end
         if(node[:address].nil?)
-          raise(ViewException, "The 'address' field is required!")
+          raise(WorkspaceException, "The 'address' field is required!")
         end
         if(node[:length].nil?)
-          raise(ViewException, "The 'length' field is required!")
+          raise(WorkspaceException, "The 'length' field is required!")
         end
         if(node[:value].nil?)
-          raise(ViewException, "The 'value' field is required!")
+          raise(WorkspaceException, "The 'value' field is required!")
         end
         if(!node[:refs].nil? && !node[:refs].is_a?(Array))
-          raise(ViewException, "The 'refs' field, if specified, must be an array (not a #{node[:refs].class})!")
+          raise(WorkspaceException, "The 'refs' field, if specified, must be an array (not a #{node[:refs].class})!")
         end
         if(node[:address] < segment[:address] || (node[:address] + node[:length]) > (segment[:address] + segment[:data].length()))
-          raise(ViewException, "The node goes outside the segment's memory space (node goes from 0x%x to 0x%x, segment goes from 0x%x to 0x%x)!" % [
+          raise(WorkspaceException, "The node goes outside the segment's memory space (node goes from 0x%x to 0x%x, segment goes from 0x%x to 0x%x)!" % [
             node[:address],
             node[:address] + node[:length],
             segment[:address],
@@ -393,18 +378,18 @@ class View < ActiveRecord::Base
       # Make sure a segment name was passed in
       segment_name = params[:segment_name]
       if(segment_name.nil?)
-        raise(ViewException, ":segment_name is required")
+        raise(WorkspaceException, ":segment_name is required")
       end
 
       # Get the segment and make sure it exists
       segment = self.segments[segment_name]
       if(segment.nil?)
-        raise(ViewException, "A segment with the name '#{segment_name}':#{segment_name.class} could not be found! Known segments: #{self.segments.keys.join(", ")}")
+        raise(WorkspaceException, "A segment with the name '#{segment_name}':#{segment_name.class} could not be found! Known segments: #{self.segments.keys.join(", ")}")
       end
 
       addresses = params[:addresses]
       if(addresses.nil?)
-        raise(ViewException, ":addresses is a required field")
+        raise(WorkspaceException, ":addresses is a required field")
       end
       if(!addresses.is_a?(Array))
         addresses = [addresses]
@@ -494,27 +479,27 @@ class View < ActiveRecord::Base
   # Returns either the real or a fake node (should not be used externally)
   def node_at(segment, address)
     if(segment.nil?)
-      raise(ViewException, "segment can't be nil")
+      raise(WorkspaceException, "segment can't be nil")
     end
     if(!segment.is_a?(Hash))
-      raise(ViewException, "segment was the wrong type!")
+      raise(WorkspaceException, "segment was the wrong type!")
     end
 
     if(address.nil?)
-      raise(ViewException, "address can't be nil")
+      raise(WorkspaceException, "address can't be nil")
     end
     if(!address.is_a?(Fixnum))
-      raise(ViewException, "address was the wrong type!")
+      raise(WorkspaceException, "address was the wrong type!")
     end
 
     # Get the offset into the node so we can handle the data properly
     offset = address - segment[:address]
 
     if(offset < 0)
-      raise(ViewException, "address was too small for the segment")
+      raise(WorkspaceException, "address was too small for the segment")
     end
     if(offset >= segment[:data].length)
-      raise(ViewException, "address was too big for the segment")
+      raise(WorkspaceException, "address was too big for the segment")
     end
 
     logger.warn("Getting node at %s:0x%08x" % [segment[:name], address])
@@ -578,13 +563,13 @@ class View < ActiveRecord::Base
     # Make sure a segment name was passed in
     segment_name = params[:segment_name]
     if(segment_name.nil?)
-      raise(ViewException, ":segment_name is required")
+      raise(WorkspaceException, ":segment_name is required")
     end
 
     # Get the segment and make sure it exists
     segment = self.segments[segment_name]
     if(segment.nil?)
-      raise(ViewException, "A segment with the name '#{segment[:name]}':#{segment[:name].class} could not be found! Known segments: #{self.segments.keys.join(", ")}")
+      raise(WorkspaceException, "A segment with the name '#{segment[:name]}':#{segment[:name].class} could not be found! Known segments: #{self.segments.keys.join(", ")}")
     end
 
     results = {}
@@ -594,10 +579,10 @@ class View < ActiveRecord::Base
 
       # Sanity checking myself, I can probably remove this later once I trust node_at()
       if(node.nil?)
-        raise(ViewException, "Somehow we ended up with node_at() returning nil! Oops!")
+        raise(WorkspaceException, "Somehow we ended up with node_at() returning nil! Oops!")
       end
       if(node[:revision].nil?)
-        raise(ViewException, "Somehow we ended up with node_at() not returning a revision! Oops!")
+        raise(WorkspaceException, "Somehow we ended up with node_at() not returning a revision! Oops!")
       end
 
       # Only add it if it meets the user's requirements
@@ -621,7 +606,7 @@ class View < ActiveRecord::Base
     since         = params[:since] || -1
 
     result = {
-      :view_id      => self.id,
+      :workspace_id      => self.id,
       :binary_id    => binary.id,
       :name         => self.name,
       :revision     => self.revision,

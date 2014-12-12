@@ -12,7 +12,7 @@ class CreateTables < ActiveRecord::Migration
       t.timestamps()
     end
 
-    create_table(:views) do |t|
+    create_table(:workspaces) do |t|
       t.belongs_to(:binary)
 
       t.string(:name)
@@ -30,6 +30,6 @@ class CreateTables < ActiveRecord::Migration
 
   def down()
     drop_table :binaries
-    drop_table :views
+    drop_table :workspaces
   end
 end

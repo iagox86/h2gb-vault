@@ -4,7 +4,7 @@ require 'sinatra'
 require 'sinatra/activerecord'
 
 require 'models/binary'
-require 'models/view'
+require 'models/workspace'
 
 require 'json'
 
@@ -245,29 +245,29 @@ class Vault < Sinatra::Application
     return result
   end
 
-  # Create view
-  post('/binaries/:binary_id/new_view') do |binary_id|
+  # Create workspace
+  post('/binaries/:binary_id/new_workspace') do |binary_id|
     b = Binary.find(binary_id)
 
-    view = b.views.new(:name => params.delete(:name))
-    view.save()
-    return view.to_json(params)
+    workspace = b.workspaces.new(:name => params.delete(:name))
+    workspace.save()
+    return workspace.to_json(params)
   end
 
-  # Get views for a binary
-  get('/binaries/:binary_id/views') do |binary_id|
+  # Get workspaces for a binary
+  get('/binaries/:binary_id/workspaces') do |binary_id|
     b = Binary.find(binary_id)
 
     return {
-      :views => View.all_to_json({
-        :all => b.views.all()
+      :workspaces => Workspace.all_to_json({
+        :all => b.workspaces.all()
       }.merge(params)
     )}
   end
 
-  # Find view
-  get('/views/:view_id') do |view_id|
-    v = View.find(view_id)
+  # Find workspace
+  get('/workspaces/:workspace_id') do |workspace_id|
+    v = Workspace.find(workspace_id)
 
     return v.to_json({
       :with_segments => false, # These defaults will be overridden by the user's request
@@ -276,10 +276,10 @@ class Vault < Sinatra::Application
     }.merge(params))
   end
 
-  # Update view
+  # Update workspace
   # TODO: Make sure this is being tested
-  put('/views/:view_id') do |view_id|
-    v = View.find(view_id)
+  put('/workspaces/:workspace_id') do |workspace_id|
+    v = Workspace.find(workspace_id)
     v.name = params[:name]
     v.save()
 
@@ -290,16 +290,16 @@ class Vault < Sinatra::Application
     }.merge(params))
   end
 
-  # Delete view
-  delete('/views/:view_id') do |view_id|
-    v = View.find(view_id)
+  # Delete workspace
+  delete('/workspaces/:workspace_id') do |workspace_id|
+    v = Workspace.find(workspace_id)
     v.destroy()
 
     return {:deleted => true}
   end
 
-  post('/views/:view_id/set_properties') do |view_id|
-    v = View.find(view_id)
+  post('/workspaces/:workspace_id/set_properties') do |workspace_id|
+    v = Workspace.find(workspace_id)
 
     properties = params.delete(:properties)
     if(!properties.is_a?(Hash))
@@ -312,15 +312,15 @@ class Vault < Sinatra::Application
     return v.to_json(params)
   end
 
-  post('/views/:view_id/get_properties') do |view_id|
-    v = View.find(view_id)
+  post('/workspaces/:workspace_id/get_properties') do |workspace_id|
+    v = Workspace.find(workspace_id)
     keys = params.delete(:keys)
     result = v.get_properties(keys)
     return result
   end
 
-  post('/views/:view_id/new_segments') do |view_id|
-    view = View.find(view_id)
+  post('/workspaces/:workspace_id/new_segments') do |workspace_id|
+    workspace = Workspace.find(workspace_id)
 
     # Convert the segment names to strings instead of symbols
     segments = params.delete(:segments)
@@ -329,48 +329,48 @@ class Vault < Sinatra::Application
     end
 
     # Loop through the one or more segments we need to create and do them
-    view.create_segments(segments)
-    view.save()
+    workspace.create_segments(segments)
+    workspace.save()
 
-    return view.to_json({
+    return workspace.to_json({
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => false,
-      :since         => view.starting_revision,
+      :since         => workspace.starting_revision,
     }.merge(params))
   end
 
-  post('/views/:view_id/delete_segments') do |view_id|
-    view = View.find(view_id)
+  post('/workspaces/:workspace_id/delete_segments') do |workspace_id|
+    workspace = Workspace.find(workspace_id)
     segments = params[:segments]
 
     # Delete the segments
-    view.delete_segments(segments)
-    view.save()
+    workspace.delete_segments(segments)
+    workspace.save()
 
-    return view.to_json({
+    return workspace.to_json({
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => false,
-      :since         => view.starting_revision,
+      :since         => workspace.starting_revision,
     }.merge(params))
   end
 
-  post('/views/:view_id/delete_all_segments') do |view_id|
-    view = View.find(view_id)
-    view.delete_all_segments()
-    view.save()
+  post('/workspaces/:workspace_id/delete_all_segments') do |workspace_id|
+    workspace = Workspace.find(workspace_id)
+    workspace.delete_all_segments()
+    workspace.save()
 
-    return view.to_json({
+    return workspace.to_json({
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => false,
-      :since         => view.starting_revision,
+      :since         => workspace.starting_revision,
     }.merge(params))
   end
 
-  post('/views/:view_id/new_nodes') do |view_id|
-    view = View.find(view_id)
+  post('/workspaces/:workspace_id/new_nodes') do |workspace_id|
+    workspace = Workspace.find(workspace_id)
 
     if(params[:nodes].nil?)
       raise(VaultException, "Required field: 'nodes'.")
@@ -379,83 +379,83 @@ class Vault < Sinatra::Application
       raise(VaultException, "Required field: 'segment'.")
     end
 
-    view.create_nodes(
+    workspace.create_nodes(
       :segment_name => params[:segment],
       :nodes        => params[:nodes],
     )
-    view.save()
+    workspace.save()
 
-    return view.to_json({
+    return workspace.to_json({
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => true,
-      :since         => view.starting_revision,
+      :since         => workspace.starting_revision,
     }.merge(params))
   end
 
-  post('/views/:view_id/delete_nodes') do |view_id|
-    view = View.find(view_id)
+  post('/workspaces/:workspace_id/delete_nodes') do |workspace_id|
+    workspace = Workspace.find(workspace_id)
     segment_name = params[:segment]
     addresses = params[:addresses]
-    view.delete_nodes({
+    workspace.delete_nodes({
       :segment_name => segment_name,
       :addresses    =>addresses
     })
-    view.save()
+    workspace.save()
 
-    return view.to_json({
+    return workspace.to_json({
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => true,
-      :since         => view.starting_revision,
+      :since         => workspace.starting_revision,
     }.merge(params))
   end
 
-  post('/views/:view_id/undo') do |view_id|
-    view = View.find(view_id)
-    view.undo()
-    view.save()
+  post('/workspaces/:workspace_id/undo') do |workspace_id|
+    workspace = Workspace.find(workspace_id)
+    workspace.undo()
+    workspace.save()
 
-    result = view.to_json({
+    result = workspace.to_json({
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => true,
-      :since         => view.starting_revision,
-    }.merge(params))
-
-    return result
-  end
-
-  post('/views/:view_id/clear_undo_log') do |view_id|
-    view = View.find(view_id)
-    view.clear_undo_log()
-    view.save()
-
-    result = view.to_json({
-      :with_segments => true, # These defaults will be overridden by the user's request
-      :with_data     => false,
-      :with_nodes    => true,
-      :since         => view.starting_revision,
+      :since         => workspace.starting_revision,
     }.merge(params))
 
     return result
   end
 
-  post('/views/:view_id/redo') do |view_id|
-    view = View.find(view_id)
-    view.redo()
-    view.save()
+  post('/workspaces/:workspace_id/clear_undo_log') do |workspace_id|
+    workspace = Workspace.find(workspace_id)
+    workspace.clear_undo_log()
+    workspace.save()
 
-    return view.to_json({
+    result = workspace.to_json({
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => true,
-      :since         => view.starting_revision,
+      :since         => workspace.starting_revision,
+    }.merge(params))
+
+    return result
+  end
+
+  post('/workspaces/:workspace_id/redo') do |workspace_id|
+    workspace = Workspace.find(workspace_id)
+    workspace.redo()
+    workspace.save()
+
+    return workspace.to_json({
+      :with_segments => true, # These defaults will be overridden by the user's request
+      :with_data     => false,
+      :with_nodes    => true,
+      :since         => workspace.starting_revision,
     }.merge(params))
   end
 
-  get('/views/:view_id/segments') do |view_id|
-    view = View.find(view_id)
+  get('/workspaces/:workspace_id/segments') do |workspace_id|
+    workspace = Workspace.find(workspace_id)
 
     if(params[:with_data].nil?)
       params
@@ -464,26 +464,26 @@ class Vault < Sinatra::Application
       params[:with_nodes] = false
     end
 
-    return view.to_json({
+    return workspace.to_json({
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => false,
     }.merge(params))
   end
 
-  get('/views/:view_id/nodes') do |view_id|
-    view = View.find(view_id)
+  get('/workspaces/:workspace_id/nodes') do |workspace_id|
+    workspace = Workspace.find(workspace_id)
 
-    return view.to_json({
+    return workspace.to_json({
       :with_segments => true, # These defaults will be overridden by the user's request
       :with_data     => false,
       :with_nodes    => true,
     }.merge(params))
   end
 
-  get('/views/:view_id/debug/undo_log') do |view_id|
-    view = View.find(view_id)
+  get('/workspaces/:workspace_id/debug/undo_log') do |workspace_id|
+    workspace = Workspace.find(workspace_id)
 
-    return view.undo_to_json()
+    return workspace.undo_to_json()
   end
 end

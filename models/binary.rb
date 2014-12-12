@@ -15,7 +15,7 @@ class Binary < ActiveRecord::Base
 
   # Because I'm using UUIDs for the primary key, this needs to be defined
 #  self.primary_key = :id
-  self.has_many(:views)
+  self.has_many(:workspaces)
 
   serialize(:properties, Hash)
 
