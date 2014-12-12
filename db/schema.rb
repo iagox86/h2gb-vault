@@ -23,21 +23,13 @@ ActiveRecord::Schema.define(version: 20140920215248) do
   end
 
   create_table "views", force: true do |t|
-    t.integer  "workspace_id"
+    t.integer  "binary_id"
     t.string   "name"
     t.text     "properties"
     t.text     "undo_buffer"
     t.text     "redo_buffer"
     t.text     "segments"
     t.integer  "revision"
-    t.datetime "created_at"
-    t.datetime "updated_at"
-  end
-
-  create_table "workspaces", force: true do |t|
-    t.integer  "binary_id"
-    t.string   "name"
-    t.text     "properties"
     t.datetime "created_at"
     t.datetime "updated_at"
   end

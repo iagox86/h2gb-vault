@@ -143,7 +143,7 @@ class View < ActiveRecord::Base
   include ModelProperties
   include Undoable
 
-  belongs_to(:workspace)
+  belongs_to(:binary)
 
   serialize(:properties,  Hash)
   serialize(:undo_buffer, Array)
@@ -622,7 +622,7 @@ class View < ActiveRecord::Base
 
     result = {
       :view_id      => self.id,
-      :workspace_id => workspace.id,
+      :binary_id    => binary.id,
       :name         => self.name,
       :revision     => self.revision,
       :properties   => self.properties,

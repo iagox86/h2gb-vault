@@ -5,7 +5,6 @@ require 'sinatra/activerecord'
 
 require 'models/binary'
 require 'models/view'
-require 'models/workspace'
 
 require 'json'
 
@@ -246,80 +245,22 @@ class Vault < Sinatra::Application
     return result
   end
 
-  post('/binaries/:binary_id/new_workspace') do |binary_id|
-    b = Binary.find(binary_id)
-    w = b.workspaces.new(:name => params.delete(:name))
-    w.save()
-
-    return w.to_json(params)
-  end
-
-  get('/binaries/:binary_id/workspaces') do |binary_id|
-    b = Binary.find(binary_id)
-
-    return {:workspaces => Workspace.all_to_json(:all => b.workspaces.all()) }
-  end
-
-  # Get info about a workspace
-  get('/workspaces/:workspace_id') do |workspace_id|
-    w = Workspace.find(workspace_id)
-
-    return w.to_json(params)
-  end
-
-  # Update workspace
-  put('/workspaces/:workspace_id') do |workspace_id|
-    w = Workspace.find(workspace_id)
-    w.name = params.delete(:name)
-    w.save()
-
-    return w.to_json(params)
-  end
-
-  delete('/workspaces/:workspace_id') do |workspace_id|
-    w = Workspace.find(workspace_id)
-    w.destroy()
-
-    return {:deleted => true}
-  end
-
-  post('/workspaces/:workspace_id/set_properties') do |workspace_id|
-    w = Workspace.find(workspace_id)
-
-    properties = params.delete(:properties)
-    if(!properties.is_a?(Hash))
-      raise(VaultException, "The :properties parameter is mandatory, and must be a hash")
-    end
-
-    w.set_properties(properties)
-    w.save()
-
-    return w.to_json(params)
-  end
-
-  post('/workspaces/:workspace_id/get_properties') do |workspace_id|
-    w = Workspace.find(workspace_id)
-    keys = params.delete(:keys)
-    result = w.get_properties(keys)
-    return result
-  end
-
   # Create view
-  post('/workspaces/:workspace_id/new_view') do |workspace_id|
-    w = Workspace.find(workspace_id)
+  post('/binaries/:binary_id/new_view') do |binary_id|
+    b = Binary.find(binary_id)
 
-    view = w.views.new(:name => params.delete(:name))
+    view = b.views.new(:name => params.delete(:name))
     view.save()
     return view.to_json(params)
   end
 
-  # Get views for a workspace
-  get('/workspaces/:workspace_id/views') do |workspace_id|
-    w = Workspace.find(workspace_id)
+  # Get views for a binary
+  get('/binaries/:binary_id/views') do |binary_id|
+    b = Binary.find(binary_id)
 
     return {
       :views => View.all_to_json({
-        :all => w.views.all()
+        :all => b.views.all()
       }.merge(params)
     )}
   end
