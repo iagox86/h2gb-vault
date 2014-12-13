@@ -251,6 +251,7 @@ class Vault < Sinatra::Application
 
     workspace = b.workspaces.new(:name => params.delete(:name))
     workspace.save()
+
     return workspace.to_json(params)
   end
 

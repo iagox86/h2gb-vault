@@ -639,7 +639,7 @@ class Workspace < ActiveRecord::Base
           :name         => segment[:name],
           :revision     => segment[:revision],
           :address      => segment[:address],
-          :file_address => segment[:file_address],
+          :details      => segment[:details],
         }
 
         # Don't include the data if the requester doesn't want it
