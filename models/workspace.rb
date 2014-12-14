@@ -60,7 +60,7 @@ module Undoable
     end
   end
 
-  def undo()
+  def undo(params = {})
     @undoing = true
 
     # Create a checkpoint in the redo buffer
@@ -81,12 +81,17 @@ module Undoable
       else
         raise(WorkspaceException, "Unknown action type: #{action[:type]}")
       end
+
+      if(params[:step] == true)
+        break
+      end
     end
+
 
     @undoing = false
   end
 
-  def redo()
+  def redo(params = {})
     @redoing = true
 
     loop do
@@ -104,6 +109,10 @@ module Undoable
         self.send(action[:forward][:method], action[:forward][:params])
       else
         raise(WorkspaceException, "Unknown action type: #{action[:type]}")
+      end
+
+      if(params[:step] == true)
+        break
       end
     end
 

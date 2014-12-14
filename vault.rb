@@ -414,7 +414,7 @@ class Vault < Sinatra::Application
 
   post('/workspaces/:workspace_id/undo') do |workspace_id|
     workspace = Workspace.find(workspace_id)
-    workspace.undo()
+    workspace.undo(params)
     workspace.save()
 
     result = workspace.to_json({
@@ -444,7 +444,7 @@ class Vault < Sinatra::Application
 
   post('/workspaces/:workspace_id/redo') do |workspace_id|
     workspace = Workspace.find(workspace_id)
-    workspace.redo()
+    workspace.redo(params)
     workspace.save()
 
     return workspace.to_json({
