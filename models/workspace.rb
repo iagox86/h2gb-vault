@@ -527,7 +527,8 @@ class Workspace < ActiveRecord::Base
         :address => address,
         :length  => 1,
         :value   => value,
-        :details => { },
+        :details => {},
+        :refs    => []
       }
     else
       node = segment[:nodes][address]
