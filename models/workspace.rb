@@ -301,7 +301,7 @@ class Workspace < ActiveRecord::Base
   def delete_ref(from_segment, from_address)
     logger.warn("delete_ref(#{from_segment}, #{from_address})")
 
-    to_addresses = self.refs[from_segment].delete(from_address)
+    to_addresses = self.refs[from_segment].delete(from_address) || []
     puts("to_addresses => #{to_addresses}")
 
     to_addresses.each do |to_address|
@@ -331,7 +331,7 @@ class Workspace < ActiveRecord::Base
       result += (self.xrefs[to_addr] || [])
     end
 
-    return result
+    return result.sort
   end
 
   def create_nodes(params)
@@ -483,8 +483,8 @@ class Workspace < ActiveRecord::Base
           segment[:nodes_meta][a][:revision] = next_revision()
         end
 
-        # Delete xrefs
-        delete_ref(segment_name, address)
+        # Delete refs
+        delete_ref(segment_name, node[:address])
 
         # Record the action
         undo.record_action(
