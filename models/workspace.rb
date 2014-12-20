@@ -132,10 +132,68 @@ module Undoable
   end
 end
 
+module Refs
+  def create_ref(from_segment, from_address, to_addresses)
+    logger.warn("create_ref(#{from_segment}, #{from_address}, #{to_addresses})")
+    self.refs[from_segment] ||= {}
+    self.refs[from_segment][from_address] = to_addresses
+
+    to_addresses.each do |to_address|
+      self.xrefs[to_address] ||= []
+      self.xrefs[to_address] << from_address
+
+      each_segment_at(to_address) do |name, segment|
+        puts("Updating revision for segment: #{segment.inspect}")
+        segment[:revision] = next_revision()
+
+        segment[:nodes_meta][to_address] ||= {}
+        segment[:nodes_meta][to_address][:revision] = next_revision()
+      end
+    end
+  end
+
+  def delete_ref(from_segment, from_address)
+    logger.warn("delete_ref(#{from_segment}, #{from_address})")
+
+    to_addresses = self.refs[from_segment].delete(from_address) || []
+    puts("to_addresses => #{to_addresses}")
+
+    to_addresses.each do |to_address|
+      # Delete xref
+      puts("Deleting references to #{to_address} from #{from_address}")
+      self.xrefs[to_address].delete(from_address)
+
+      each_segment_at(to_address) do |name, segment|
+        segment[:revision] = next_revision()
+        segment[:nodes_meta][to_address] ||= {}
+        segment[:nodes_meta][to_address][:revision] = next_revision()
+      end
+    end
+  end
+
+  def get_refs(from_segment, from_address)
+    if(!self.refs[from_segment].nil?)
+      return self.refs[from_segment][from_address] || []
+    end
+    return []
+  end
+
+  def get_xrefs(to_address, to_length)
+    result = []
+
+    to_address.upto(to_address + to_length - 1) do |to_addr|
+      result += (self.xrefs[to_addr] || [])
+    end
+
+    return result.sort
+  end
+end
+
 class Workspace < ActiveRecord::Base
   include Model
   include ModelProperties
   include Undoable
+  include Refs
 
   belongs_to(:binary)
 
@@ -277,61 +335,6 @@ class Workspace < ActiveRecord::Base
   def delete_all_segments()
     # Do this workspace delete_segments so we get undo for free
     delete_segments(self.segments.keys)
-  end
-
-  def create_ref(from_segment, from_address, to_addresses)
-    logger.warn("create_ref(#{from_segment}, #{from_address}, #{to_addresses})")
-    self.refs[from_segment] ||= {}
-    self.refs[from_segment][from_address] = to_addresses
-
-    to_addresses.each do |to_address|
-      self.xrefs[to_address] ||= []
-      self.xrefs[to_address] << from_address
-
-      each_segment_at(to_address) do |name, segment|
-        puts("Updating revision for segment: #{segment.inspect}")
-        segment[:revision] = next_revision()
-
-        segment[:nodes_meta][to_address] ||= {}
-        segment[:nodes_meta][to_address][:revision] = next_revision()
-      end
-    end
-  end
-
-  def delete_ref(from_segment, from_address)
-    logger.warn("delete_ref(#{from_segment}, #{from_address})")
-
-    to_addresses = self.refs[from_segment].delete(from_address) || []
-    puts("to_addresses => #{to_addresses}")
-
-    to_addresses.each do |to_address|
-      # Delete xref
-      puts("Deleting references to #{to_address} from #{from_address}")
-      self.xrefs[to_address].delete(from_address)
-
-      each_segment_at(to_address) do |name, segment|
-        segment[:revision] = next_revision()
-        segment[:nodes_meta][to_address] ||= {}
-        segment[:nodes_meta][to_address][:revision] = next_revision()
-      end
-    end
-  end
-
-  def get_refs(from_segment, from_address)
-    if(!self.refs[from_segment].nil?)
-      return self.refs[from_segment][from_address] || []
-    end
-    return []
-  end
-
-  def get_xrefs(to_address, to_length)
-    result = []
-
-    to_address.upto(to_address + to_length - 1) do |to_addr|
-      result += (self.xrefs[to_addr] || [])
-    end
-
-    return result.sort
   end
 
   def create_nodes(params)
