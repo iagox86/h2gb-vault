@@ -140,7 +140,7 @@ module Refs
 
     to_addresses.each do |to_address|
       self.xrefs[to_address] ||= []
-      self.xrefs[to_address] << from_address
+      self.xrefs[to_address] << { :segment => from_segment, :address => from_address }
 
       each_segment_at(to_address) do |name, segment|
         puts("Updating revision for segment: #{segment.inspect}")
@@ -161,7 +161,7 @@ module Refs
     to_addresses.each do |to_address|
       # Delete xref
       puts("Deleting references to #{to_address} from #{from_address}")
-      self.xrefs[to_address].delete(from_address)
+      self.xrefs[to_address].delete( { :segment => from_segment, :address => from_address })
 
       each_segment_at(to_address) do |name, segment|
         segment[:revision] = next_revision()
@@ -185,7 +185,7 @@ module Refs
       result += (self.xrefs[to_addr] || [])
     end
 
-    return result.sort
+    return result.sort { |x,y| x[:address] <=> y[:address] }
   end
 end
 
