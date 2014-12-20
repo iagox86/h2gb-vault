@@ -143,6 +143,8 @@ class Workspace < ActiveRecord::Base
   serialize(:undo_buffer, Array)
   serialize(:redo_buffer, Array)
   serialize(:segments,    Hash)
+  serialize(:refs,        Hash)
+  serialize(:xrefs,       Hash)
 
   attr_reader :starting_revision
 
@@ -161,6 +163,14 @@ class Workspace < ActiveRecord::Base
 
   def next_revision()
     return self.revision + 1
+  end
+
+  def each_segment_at(address)
+    self.segments.each_pair do |name, segment|
+      if(address >= segment[:address] && address < segment[:address] + segment[:data].length)
+        yield(name, segment)
+      end
+    end
   end
 
   def create_segments(segments)
@@ -196,7 +206,6 @@ class Workspace < ActiveRecord::Base
 
         # Create the 'special' fields
         segment[:nodes]      = {}
-        segment[:xrefs]      = []
         segment[:nodes_meta] = {}
 
         # Store the new segment
@@ -270,6 +279,61 @@ class Workspace < ActiveRecord::Base
     delete_segments(self.segments.keys)
   end
 
+  def create_ref(from_segment, from_address, to_addresses)
+    logger.warn("create_ref(#{from_segment}, #{from_address}, #{to_addresses})")
+    self.refs[from_segment] ||= {}
+    self.refs[from_segment][from_address] = to_addresses
+
+    to_addresses.each do |to_address|
+      self.xrefs[to_address] ||= []
+      self.xrefs[to_address] << from_address
+
+      each_segment_at(to_address) do |name, segment|
+        puts("Updating revision for segment: #{segment.inspect}")
+        segment[:revision] = next_revision()
+
+        segment[:nodes_meta][to_address] ||= {}
+        segment[:nodes_meta][to_address][:revision] = next_revision()
+      end
+    end
+  end
+
+  def delete_ref(from_segment, from_address)
+    logger.warn("delete_ref(#{from_segment}, #{from_address})")
+
+    to_addresses = self.refs[from_segment].delete(from_address)
+    puts("to_addresses => #{to_addresses}")
+
+    to_addresses.each do |to_address|
+      # Delete xref
+      puts("Deleting references to #{to_address} from #{from_address}")
+      self.xrefs[to_address].delete(from_address)
+
+      each_segment_at(to_address) do |name, segment|
+        segment[:revision] = next_revision()
+        segment[:nodes_meta][to_address] ||= {}
+        segment[:nodes_meta][to_address][:revision] = next_revision()
+      end
+    end
+  end
+
+  def get_refs(from_segment, from_address)
+    if(!self.refs[from_segment].nil?)
+      return self.refs[from_segment][from_address] || []
+    end
+    return []
+  end
+
+  def get_xrefs(to_address, to_length)
+    result = []
+
+    to_address.upto(to_address + to_length - 1) do |to_addr|
+      result += (self.xrefs[to_addr] || [])
+    end
+
+    return result
+  end
+
   def create_nodes(params)
     undoable() do |undo|
       # Make sure a segment name was passed in
@@ -341,21 +405,9 @@ class Workspace < ActiveRecord::Base
           segment[:nodes_meta][address][:revision] = next_revision()
         end
 
-        # TODO: This will fail for refs that go outside the segment
-        if(node[:refs] && node[:refs].length() > 0)
-          node[:refs].each do |ref|
-            # Make sure the node has some metadata
-            segment[:nodes_meta][ref] ||= {}
-
-            # Make sure the node has an xrefs array
-            segment[:nodes_meta][ref][:xrefs] ||= []
-
-            # Save the refs there
-            segment[:nodes_meta][ref][:xrefs] << node[:address]
-
-            # Note that the xref'd node has also been updated
-            segment[:nodes_meta][ref][:revision] = next_revision()
-          end
+        # Save the refs (and implicitly create xrefs)
+        if(!node[:refs].nil?)
+          create_ref(segment_name, node[:address], node[:refs])
         end
 
         # Record the action (note: this needs to go after delete_nodes(), otherwise things will
@@ -432,35 +484,7 @@ class Workspace < ActiveRecord::Base
         end
 
         # Delete xrefs
-        if(node[:refs] && node[:refs].length() > 0)
-          node[:refs].each do |ref|
-            # Make sure the node has some metadata
-            if(segment[:nodes_meta][ref].nil?)
-              puts("Warning: missing Xref entry! [1]")
-              next
-            end
-
-            # Make sure the node has an xrefs array
-            if(segment[:nodes_meta][ref][:xrefs].nil?)
-              puts("Warning: missing Xref entry! [2]")
-              next
-            end
-
-            # Delete the xref
-            if(segment[:nodes_meta][ref][:xrefs].delete(node[:address]).nil?)
-              puts("Warning: missing Xref entry! [3]")
-              next
-            end
-
-            # Get rid of the xrefs altogether if there aren't any
-            if(segment[:nodes_meta][ref][:xrefs].length() == 0)
-              segment[:nodes_meta][ref][:xrefs] = nil
-            end
-
-            # Update the target node's revision number
-            segment[:nodes_meta][ref][:revision] = next_revision()
-          end
-        end
+        delete_ref(segment_name, address)
 
         # Record the action
         undo.record_action(
@@ -511,8 +535,6 @@ class Workspace < ActiveRecord::Base
       raise(WorkspaceException, "address was too big for the segment")
     end
 
-    logger.warn("Getting node at %s:0x%08x" % [segment[:name], address])
-
     # Create either a real node or an undefined one
     if(segment[:nodes][address].nil?)
       value = segment[:data][offset].ord()
@@ -528,7 +550,6 @@ class Workspace < ActiveRecord::Base
         :length  => 1,
         :value   => value,
         :details => {},
-        :refs    => []
       }
     else
       node = segment[:nodes][address]
@@ -538,18 +559,13 @@ class Workspace < ActiveRecord::Base
     node[:raw] = Base64.encode64(segment[:data][offset, node[:length]])
 
     # Figure out some meta-data based on any nodes
-    node[:xrefs] = []
+    node[:refs] = get_refs(segment[:name], node[:address])
+    node[:xrefs] = get_xrefs(node[:address], node[:length])
     node[:revision] = segment[:start_revision] # Safe default
 
     node[:address].upto(node[:address] + node[:length] - 1) do |a|
       # Make sure we have some metadata
       if(!segment[:nodes_meta][a].nil?)
-        # Take xrefs from child nodes
-        xrefs = segment[:nodes_meta][a][:xrefs]
-        if(!xrefs.nil?())
-          node[:xrefs] += xrefs
-        end
-
         # Take the most recent revision of any nodes
         revision = segment[:nodes_meta][a][:revision]
         if(!revision.nil? && revision > node[:revision])
@@ -557,9 +573,6 @@ class Workspace < ActiveRecord::Base
         end
       end
     end
-
-    # Make sure the xrefs are unique and sorted
-    node[:xrefs] = node[:xrefs].uniq.sort
 
     return node
   end
@@ -599,7 +612,7 @@ class Workspace < ActiveRecord::Base
       if(params[:since].nil? || (node[:revision] > params[:since]))
         results[node[:address]] = node
       else
-        puts("Not including node with revision %d (showing nodes since %d)" % [node[:revision], params[:since]])
+        #puts("Not including node with revision %d (showing nodes since %d)" % [node[:revision], params[:since]])
       end
 
       address += node[:length]

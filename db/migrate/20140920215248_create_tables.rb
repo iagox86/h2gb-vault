@@ -21,6 +21,8 @@ class CreateTables < ActiveRecord::Migration
       t.text(:undo_buffer)
       t.text(:redo_buffer)
       t.text(:segments)
+      t.text(:refs)
+      t.text(:xrefs)
 
       t.integer(:revision)
 
