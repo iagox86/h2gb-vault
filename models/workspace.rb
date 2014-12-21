@@ -133,17 +133,49 @@ module Undoable
 end
 
 module Refs
-  def create_ref(from_segment, from_address, to_addresses)
-    logger.warn("create_ref(#{from_segment}, #{from_address}, #{to_addresses})")
-    self.refs[from_segment] ||= {}
-    self.refs[from_segment][from_address] = to_addresses
+  def sanity_check_refs(refs)
+    # If it's not present, just ignore it
+    if(refs.nil?)
+      return false
+    end
 
-    to_addresses.each do |to_address|
-      self.xrefs[to_address] ||= []
-      self.xrefs[to_address] << { :segment => from_segment, :address => from_address }
+    # If it's not an array, that's a bigger problem
+    if(!refs.is_a?(Array))
+      raise(WorkspaceException, "The 'refs' field needs to either be nil or an array")
+    end
+
+    # Make sure each ref is a hash containing an :address
+    refs.each do |ref|
+      if(!ref.is_a?(Hash))
+        raise(WorkspaceException, "Each element in the 'refs' array needs to be a Hash")
+      end
+      if(ref[:address].nil?)
+        raise(WorkspaceException, "Each element in the 'refs' array needs to have an :address field")
+      end
+    end
+
+    return true
+  end
+
+  def create_ref(from_segment, from_address, tos)
+    logger.warn("create_ref(#{from_segment}, #{from_address}, #{tos})")
+    self.refs[from_segment] ||= {}
+    self.refs[from_segment][from_address] ||= []
+
+    tos.each do |to|
+      # Safe the forward reference
+      self.refs[from_segment][from_address] << to.clone
+
+      # Save the cross reference (note: we have to clone this, otherwise we screw up the original object)
+      xref = to.clone
+      to_address = xref.delete(:address)
+      self.xrefs[to_address] ||= [] # TODO: This is kind of a fugly way of storing / deleting xrefs
+      self.xrefs[to_address] << {
+        :segment => from_segment,
+        :address => from_address
+      }.merge(xref)
 
       each_segment_at(to_address) do |name, segment|
-        puts("Updating revision for segment: #{segment.inspect}")
         segment[:revision] = next_revision()
 
         segment[:nodes_meta][to_address] ||= {}
@@ -155,14 +187,17 @@ module Refs
   def delete_ref(from_segment, from_address)
     logger.warn("delete_ref(#{from_segment}, #{from_address})")
 
-    to_addresses = self.refs[from_segment].delete(from_address) || []
-    puts("to_addresses => #{to_addresses}")
+    tos = self.refs[from_segment].delete(from_address) || []
 
-    to_addresses.each do |to_address|
-      # Delete xref
-      puts("Deleting references to #{to_address} from #{from_address}")
-      self.xrefs[to_address].delete( { :segment => from_segment, :address => from_address })
+    tos.each do |to|
+      to_address = to[:address]
 
+      # Delete the appropriate elements
+      self.xrefs[to_address].delete_if do |element|
+        (element[:segment] == from_segment && element[:address] == from_address)
+      end
+
+      # Update the revision metadata
       each_segment_at(to_address) do |name, segment|
         segment[:revision] = next_revision()
         segment[:nodes_meta][to_address] ||= {}
@@ -409,7 +444,7 @@ class Workspace < ActiveRecord::Base
         end
 
         # Save the refs (and implicitly create xrefs)
-        if(!node[:refs].nil?)
+        if(sanity_check_refs(node[:refs]))
           create_ref(segment_name, node[:address], node[:refs])
         end
 
