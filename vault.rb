@@ -121,6 +121,11 @@ class Vault < Sinatra::Application
       body = request.body.read()
 
       if(body.length > 0)
+        # This is ugly hacks to get around a bug in rack
+        if(body =~ /^BASE64/)
+          body = Base64.decode64(body[6..-1])
+        end
+
         params.merge!(JSON.parse(body, :symbolize_names => true))
       end
     end
@@ -152,11 +157,7 @@ class Vault < Sinatra::Application
         value # return
       end
 
-      if(params['pretty'])
-        response.body = JSON.pretty_generate(response.body) + "\n"
-      else
-        response.body = JSON.generate(response.body) + "\n"
-      end
+      response.body = JSON.pretty_generate(response.body) + "\n"
 
     end
   end
