@@ -447,28 +447,28 @@ class Workspace < ActiveRecord::Base
         if(sanity_check_refs(node[:refs]))
           create_ref(segment_name, node[:address], node[:refs])
         end
-
-        # Record the action (note: this needs to go after delete_nodes(), otherwise things will
-        # undo in the wrong order...
-        undo.record_action(
-          :forward => {
-            :type   => :method,
-            :method => :create_nodes,
-            :params => {
-              :segment_name => segment_name,
-              :nodes        => node,
-            },
-          },
-          :backward => {
-            :type   => :method,
-            :method => :delete_nodes,
-            :params => {
-              :segment_name => segment_name,
-              :addresses    => node[:address],
-            },
-          }
-        )
       end
+
+      # Record the action (note: this needs to go after delete_nodes(), otherwise things will
+      # undo in the wrong order...
+      undo.record_action(
+        :forward => {
+          :type   => :method,
+          :method => :create_nodes,
+          :params => {
+            :segment_name => segment_name,
+            :nodes        => nodes,
+          },
+        },
+        :backward => {
+          :type   => :method,
+          :method => :delete_nodes,
+          :params => {
+            :segment_name => segment_name,
+            :addresses    => nodes.map() { |node| node[:address] }
+          },
+        }
+      )
     end
   end
 
