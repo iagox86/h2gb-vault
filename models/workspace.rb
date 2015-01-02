@@ -55,7 +55,7 @@ module Undoable
 
       # When a real action is taken, kill the 'redo' buffer
       if(!@redoing)
-        self.redo_buffer = []
+        self.redo_buffer.clear()
       end
     end
   end
@@ -127,8 +127,8 @@ module Undoable
   end
 
   def clear_undo_log()
-    self.undo_buffer = []
-    self.redo_buffer = []
+    self.undo_buffer.clear()
+    self.redo_buffer.clear()
   end
 end
 
@@ -224,6 +224,18 @@ module Refs
   end
 end
 
+class MarshallData
+  def self.load(str)
+    if(str.nil?)
+      return nil
+    end
+    return Marshal::load(str)
+  end
+  def self.dump(obj)
+    return Marshal::dump(obj)
+  end
+end
+
 class Workspace < ActiveRecord::Base
   include Model
   include ModelProperties
@@ -235,7 +247,7 @@ class Workspace < ActiveRecord::Base
   serialize(:properties,  Hash)
   serialize(:undo_buffer, Array)
   serialize(:redo_buffer, Array)
-  serialize(:segments,    Hash)
+  serialize(:segments,    MarshallData)
   serialize(:refs,        Hash)
   serialize(:xrefs,       Hash)
 
@@ -245,9 +257,12 @@ class Workspace < ActiveRecord::Base
     params[:properties] ||= {}
 
     super(params.merge({
+      :properties  => {},
       :undo_buffer => [],
       :redo_buffer => [],
       :segments    => {},
+      :refs        => {},
+      :xrefs       => {},
       :revision    => 0,
     }))
 
@@ -416,6 +431,7 @@ class Workspace < ActiveRecord::Base
         if(!node[:refs].nil? && !node[:refs].is_a?(Array))
           raise(WorkspaceException, "The 'refs' field, if specified, must be an array (not a #{node[:refs].class})!")
         end
+
         if(node[:address] < segment[:address] || (node[:address] + node[:length]) > (segment[:address] + segment[:data].length()))
           raise(WorkspaceException, "The node goes outside the segment's memory space (node goes from 0x%x to 0x%x, segment goes from 0x%x to 0x%x)!" % [
             node[:address],
@@ -667,7 +683,7 @@ class Workspace < ActiveRecord::Base
     since         = params[:since] || -1
 
     result = {
-      :workspace_id      => self.id,
+      :workspace_id => self.id,
       :binary_id    => binary.id,
       :name         => self.name,
       :revision     => self.revision,

@@ -4,7 +4,7 @@ class CreateTables < ActiveRecord::Migration
 #      t.string(:id, :limit => 36, :primary => true, :null => false)
 
       t.string(:name)
-      t.text(:properties)
+      t.binary(:properties)
 
       t.string(:filename)
       t.string(:comment)
@@ -16,13 +16,13 @@ class CreateTables < ActiveRecord::Migration
       t.belongs_to(:binary)
 
       t.string(:name)
-      t.text(:properties)
+      t.binary(:properties)
 
-      t.text(:undo_buffer)
-      t.text(:redo_buffer)
-      t.text(:segments)
-      t.text(:refs)
-      t.text(:xrefs)
+      t.binary(:undo_buffer)
+      t.binary(:redo_buffer)
+      t.binary(:segments)
+      t.binary(:refs)
+      t.binary(:xrefs)
 
       t.integer(:revision)
 

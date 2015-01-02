@@ -13,24 +13,24 @@
 
 ActiveRecord::Schema.define(version: 20140920215248) do
 
-  create_table "binaries", force: true do |t|
+  create_table "binaries", force: :cascade do |t|
     t.string   "name"
-    t.text     "properties"
+    t.binary   "properties"
     t.string   "filename"
     t.string   "comment"
     t.datetime "created_at"
     t.datetime "updated_at"
   end
 
-  create_table "workspaces", force: true do |t|
+  create_table "workspaces", force: :cascade do |t|
     t.integer  "binary_id"
     t.string   "name"
-    t.text     "properties"
-    t.text     "undo_buffer"
-    t.text     "redo_buffer"
-    t.text     "segments"
-    t.text     "refs"
-    t.text     "xrefs"
+    t.binary   "properties"
+    t.binary   "undo_buffer"
+    t.binary   "redo_buffer"
+    t.binary   "segments"
+    t.binary   "refs"
+    t.binary   "xrefs"
     t.integer  "revision"
     t.datetime "created_at"
     t.datetime "updated_at"

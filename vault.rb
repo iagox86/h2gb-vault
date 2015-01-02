@@ -10,8 +10,6 @@ require 'json'
 
 require 'pp' # TODO: DEBUG
 
-# Disable verbose logging
-
 # Database stuff
 ActiveRecord::Base.establish_connection(
   :adapter => 'sqlite3',
@@ -385,6 +383,7 @@ class Vault < Sinatra::Application
       :segment_name => params[:segment],
       :nodes        => params[:nodes],
     )
+
     workspace.save()
 
     return workspace.to_json({
