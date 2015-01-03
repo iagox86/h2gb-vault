@@ -253,6 +253,21 @@ class Workspace < ActiveRecord::Base
 
   attr_reader :starting_revision
 
+  @@cache = {}
+  def Workspace.find(id)
+    if(@@cache[id].nil?)
+      puts("MISS")
+      @@cache[id] = Workspace.find_by_id(id)
+    else
+      puts("HIT")
+    end
+
+    result = @@cache[id]
+    result.after_find()
+
+    return result
+  end
+
   def initialize(params = {})
     params[:properties] ||= {}
 
@@ -738,6 +753,10 @@ class Workspace < ActiveRecord::Base
 
   after_find do |c|
     # Set up the starting revision
+    @starting_revision = self.revision
+  end
+
+  def after_find()
     @starting_revision = self.revision
   end
 
